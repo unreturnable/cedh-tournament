@@ -16,3 +16,14 @@
 .btn:hover {
     background-color: #4752c4;
 }
+
+.discord-logo {
+    vertical-align: middle;
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    margin-bottom: 3px;
+}
+body.loading #main-content {
+    display: none;
+}

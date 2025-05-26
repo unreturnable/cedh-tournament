@@ -99,6 +99,8 @@ window.onload = async () => {
     } else {
         showLogin();
     }
+    // Show content after login check
+    document.body.classList.remove('loading');
 };
 
 document.getElementById('logout').onclick = () => {

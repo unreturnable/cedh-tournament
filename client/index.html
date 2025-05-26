@@ -3,24 +3,24 @@
 <head>
     <title>cEDH tournament runner</title>
     <link rel="stylesheet" href="css/index.css">
-    <style>
-        .discord-logo {
-            vertical-align: middle;
-            width: 22px;
-            height: 22px;
-            margin-right: 8px;
-            margin-bottom: 3px;
-        }
-    </style>
 </head>
-<body>
-    <div id="info"><h1>Login to see tournaments</h1></div>
-    <a id="login" style="display: none;" class="btn">
-        <img class="discord-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/discord.svg" alt="Discord Logo">
-        Login with Discord
-    </a>
-    <button id="logout" style="display: none;" class="btn">Logout</button>
-    <div id="tournaments"></div>
+<body class="loading">
+    <div id="main-content">
+        <div id="info"><h1>Login to see tournaments</h1></div>
+        <a id="login" style="display: none;" class="btn">
+            <img class="discord-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/discord.svg" alt="Discord Logo">
+            Login with Discord
+        </a>
+        <button id="logout" style="display: none;" class="btn">Logout</button>
+        <div id="tournaments"></div>
+    </div>
     <script src="js/index.js"></script>
+    <script>
+        // Remove loading class after login check is complete
+        window.addEventListener('DOMContentLoaded', () => {
+            // index.js should call: document.body.classList.remove('loading');
+            // after it finishes checking login status
+        });
+    </script>
 </body>
 </html>
