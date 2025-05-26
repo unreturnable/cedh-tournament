@@ -1,7 +1,7 @@
 const { request } = require('undici');
 const express = require('express');
 const cors = require('cors');
-const { clientId, clientSecret, host, port } = require('./config.json');
+const { clientId, clientSecret, protocol, host, port } = require('./config.json');
 
 const tournamentData = [
 	{
@@ -46,7 +46,7 @@ app.get('/oauth/callback', async (req, res) => {
                 client_secret: clientSecret,
                 code: code,
                 grant_type: 'authorization_code',
-                redirect_uri: `http://${host}:${port}/oauth/callback`,
+                redirect_uri: `${protocol}://${host}:${port}/oauth/callback`,
                 scope: 'identify',
             }).toString(),
             headers: {
@@ -94,4 +94,4 @@ app.post('/api/tournaments', (req, res) => {
     return res.json(userTournaments);
 });
 
-app.listen(port, () => console.log(`App listening at http://localhost:${port}`));
+app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));
