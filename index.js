@@ -1,7 +1,7 @@
 const { request } = require('undici');
 const express = require('express');
 const cors = require('cors');
-const { clientId, clientSecret, protocol, host, port } = require('./config.json');
+const { clientId, clientSecret, protocol, host, port, redirect } = require('./config.json');
 
 const tournamentData = [
 	{
@@ -30,7 +30,7 @@ app.get('/oauth/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('No code provided');
 
-    let redirectUri = port != 0 ? `${protocol}://${host}:${port}/oauth/callback` : `${protocol}://${host}/oauth/callback`
+    let redirectUri = !redirect ? `${protocol}://${host}:${port}/oauth/callback` : `${protocol}://${host}/oauth/callback`
 
     try {
         const tokenResponseData = await request('https://discord.com/api/oauth2/token', {
