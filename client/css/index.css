@@ -27,3 +27,15 @@
 body.loading #main-content {
     display: none;
 }
+
+.round {
+    margin-bottom: 2em;
+    padding: 1em;
+    border: 1px solid #ccc;
+}
+
+.pod {
+    margin-bottom: 1em;
+    padding: 0.5em;
+    border: 1px solid #eee;
+}

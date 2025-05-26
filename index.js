@@ -7,8 +7,11 @@ const tournamentData = [
 	{
 		id: "1234-5678-9101",
 		user: "177871115555831810",
+        username: "unreturnable",
 		title: "Super cool tournament",
         date: "2025-06-20T12:30:00+01:00",
+        players: ["test1", "test2", "test3", "test4", "test5", "test6", "test7", "test8"],
+        rounds: [ { round: 1, pods: [{ players: ["test1", "test2", "test3", "test4"], result: "pending" } , { players: ["test5", "test6", "test7", "test8"], result: "Win", winner: "test6" } ] } ]
 	}
 ];
 
