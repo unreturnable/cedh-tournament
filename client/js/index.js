@@ -1,5 +1,5 @@
 const clientId = '1366114077251866726';
-const redirectUri = 'http://localhost:3000/oauth/callback';
+const redirectUri = 'http://' + window.location.host + '/oauth/callback';
 const scope = 'identify';
 
 function showLogin() {
