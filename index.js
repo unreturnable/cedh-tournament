@@ -30,6 +30,8 @@ app.get('/oauth/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('No code provided');
 
+    let redirectUri = port != 0 ? `${protocol}://${host}:${port}/oauth/callback` : `${protocol}://${host}/oauth/callback`
+
     try {
         const tokenResponseData = await request('https://discord.com/api/oauth2/token', {
             method: 'POST',
@@ -38,7 +40,7 @@ app.get('/oauth/callback', async (req, res) => {
                 client_secret: clientSecret,
                 code: code,
                 grant_type: 'authorization_code',
-                redirect_uri: `${protocol}://${host}:${port}/oauth/callback`,
+                redirect_uri: redirectUri,
                 scope: 'identify',
             }).toString(),
             headers: {
