@@ -9,18 +9,6 @@ const tournamentData = [
 		user: "177871115555831810",
 		title: "Super cool tournament",
         date: "2025-06-20T12:30:00+01:00",
-	},
-	{
-		id: "abcd-5678-9101",
-		user: "0",
-		title: "Less cool tournament",
-        date: "2025-05-10T10:30:00Z",
-	},
-	{
-		id: "1234-abcd-9101",
-		user: "177871115555831810",
-		title: "Even cooler tournament",
-        date: "2025-05-24T10:30:00+01:00",
 	}
 ];
 
@@ -31,6 +19,10 @@ app.use(express.static('client'));
 
 app.get('/', (req, res) => {
     return res.sendFile('index.html', { root: './client/' });
+});
+
+app.get('/tournament/:id', (req, res) => {
+    return res.sendFile('tournament.html', { root: './client/' });
 });
 
 // OAuth2 callback endpoint
@@ -92,6 +84,15 @@ app.post('/api/tournaments', (req, res) => {
 
     const userTournaments = tournamentData.filter(t => t.user === String(userId));
     return res.json(userTournaments);
+});
+
+app.get('/api/tournament/:id', (req, res) => {
+    const { id } = req.params;
+    const tournament = tournamentData.find(t => t.id === id);
+    if (!tournament) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+    return res.json(tournament);
 });
 
 app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));
