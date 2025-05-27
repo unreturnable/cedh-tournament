@@ -1,19 +1,12 @@
 const { request } = require('undici');
 const express = require('express');
 const cors = require('cors');
+const { JsonDB, Config } = require('node-json-db'); // Add this line
 const { clientId, clientSecret, protocol, host, port, redirect } = require('./config.json');
+const { v4: uuidv4 } = require('uuid'); // Add at the top: npm install uuid
 
-const tournamentData = [
-	{
-		id: "1234-5678-9101",
-		user: "177871115555831810",
-        username: "unreturnable",
-		title: "Super cool tournament",
-        date: "2025-06-20T12:30:00+01:00",
-        players: ["test1", "test2", "test3", "test4", "test5", "test6", "test7", "test8"],
-        rounds: [ { round: 1, pods: [{ players: ["test1", "test2", "test3", "test4"], result: "pending" } , { players: ["test5", "test6", "test7", "test8"], result: "Win", winner: "test6" } ] } ]
-	}
-];
+// Initialize the database
+const db = new JsonDB(new Config("tournaments", true, false, '/')); // DB file: tournaments.json
 
 const app = express();
 app.use(express.json());
@@ -83,21 +76,55 @@ app.post('/api/userinfo', async (req, res) => {
     }
 });
 
-app.post('/api/tournaments', (req, res) => {
+// Get tournaments for a user
+app.post('/api/tournaments', async (req, res) => {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
-    const userTournaments = tournamentData.filter(t => t.user === String(userId));
-    return res.json(userTournaments);
+    try {
+        // Get all tournament ids
+        const allIds = await db.getData('/'); // returns an object with ids as keys
+        const userTournaments = Object.values(allIds).filter(t => t.user === String(userId));
+        return res.json(userTournaments);
+    } catch (error) {
+        return res.json([]);
+    }
 });
 
-app.get('/api/tournament/:id', (req, res) => {
+// Get a tournament by id
+app.get('/api/tournament/:id', async (req, res) => {
     const { id } = req.params;
-    const tournament = tournamentData.find(t => t.id === id);
-    if (!tournament) {
+    try {
+        const tournament = await db.getData(`/${id}`);
+        return res.json(tournament);
+    } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
     }
-    return res.json(tournament);
+});
+
+// Create a new tournament
+app.post('/api/tournament', async (req, res) => {
+    const { userId, username, title, date } = req.body;
+    if (!userId || !title || !date) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const id = uuidv4();
+    const tournament = {
+        id,
+        user: String(userId),
+        username: username || '',
+        title,
+        date,
+        players: [],
+        rounds: []
+    };
+    try {
+        await db.push(`/${id}`, tournament, true);
+        return res.json({ success: true, id, tournament });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Failed to create tournament' });
+    }
 });
 
 app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));

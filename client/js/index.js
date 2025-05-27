@@ -2,6 +2,9 @@ const clientId = '1366114077251866726';
 const redirectUri = window.location.protocol + '//' + window.location.host + '/oauth/callback';
 const scope = 'identify';
 
+let userId = 'unknown';
+let username = 'unknown';
+
 function showLogin() {
     document.getElementById('login').style.display = 'block';
     document.getElementById('logout').style.display = 'none';
@@ -71,6 +74,10 @@ async function fetchUserInfo(token, type) {
     });
     if (res.ok) {
         const user = await res.json();
+
+        username = user.username;
+        userId = user.id;
+
         document.getElementById('info').innerHTML = `<h1>Welcome ${user.username}!</h1>`;
         showLogout();
         await fetchTournaments(user.id);
@@ -115,4 +122,38 @@ document.getElementById('login').onclick = function(e) {
     e.preventDefault();
     const loginUrl = `https://discord.com/oauth2/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
     window.location.href = loginUrl;
+};
+
+document.getElementById('createTournamentBtn').onclick = function() {
+    document.getElementById('createTournamentModal').style.display = 'block';
+};
+
+document.getElementById('cancelTournamentBtn').onclick = function() {
+    document.getElementById('createTournamentModal').style.display = 'none';
+    document.getElementById('createTournamentError').innerText = '';
+};
+
+document.getElementById('submitTournamentBtn').onclick = async function() {
+    const title = document.getElementById('tournamentName').value.trim();
+    const date = document.getElementById('tournamentDate').value;
+    if (!title || !date) {
+        document.getElementById('createTournamentError').innerText = 'Please enter a name and date.';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/tournament', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, username, title, date })
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = `/tournament/${data.id}`;
+        } else {
+            document.getElementById('createTournamentError').innerText = data.error || 'Failed to create tournament.';
+        }
+    } catch (err) {
+        document.getElementById('createTournamentError').innerText = 'Failed to create tournament.';
+    }
 };

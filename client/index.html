@@ -13,6 +13,22 @@
         </a>
         <button id="logout" style="display: none;" class="btn">Logout</button>
         <div id="tournaments"></div>
+        <button id="createTournamentBtn">Create Tournament</button>
+
+        <div id="createTournamentModal" style="display:none; position:fixed; top:20%; left:50%; transform:translate(-50%, 0); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
+            <h2>Create Tournament</h2>
+            <label>
+                Name: <input type="text" id="tournamentName" />
+            </label>
+            <br>
+            <label>
+                Date: <input type="date" id="tournamentDate" />
+            </label>
+            <br>
+            <button id="submitTournamentBtn">Create</button>
+            <button id="cancelTournamentBtn">Cancel</button>
+            <div id="createTournamentError" style="color:red;"></div>
+        </div>
     </div>
     <script src="js/index.js"></script>
     <script>
