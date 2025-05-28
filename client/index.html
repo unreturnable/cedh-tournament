@@ -7,28 +7,31 @@
 </head>
 <body class="loading">
     <div id="main-content">
+        <div style="display: flex; justify-content: flex-end;">
+            <button id="logout" style="display: none; margin-top:10px; margin-right:10px;" class="btn">Logout</button>
+        </div>
         <div id="info"><h1>Login to see tournaments</h1></div>
         <a id="login" style="display: none;" class="btn">
             <img class="discord-logo" src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/discord.svg" alt="Discord Logo">
             Login with Discord
         </a>
-        <button id="logout" style="display: none;" class="btn">Logout</button>
         <div id="tournaments"></div>
-        <button id="createTournamentBtn" style="display:none;">Create Tournament</button>
-
-        <div id="createTournamentModal" style="display:none; position:fixed; top:20%; left:50%; transform:translate(-50%, 0); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
-            <h2>Create Tournament</h2>
-            <label>
-                Name: <input type="text" id="tournamentName" />
-            </label>
-            <br>
-            <label>
-                Date: <input type="date" id="tournamentDate" />
-            </label>
-            <br>
-            <button id="submitTournamentBtn">Create</button>
-            <button id="cancelTournamentBtn">Cancel</button>
-            <div id="createTournamentError" style="color:red;"></div>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <button id="createTournamentBtn" style="display:none;">Create Tournament</button>
+            <div id="createTournamentModal" class="modal">
+                <h2>Create Tournament</h2>
+                <label>
+                    Name: <input type="text" id="tournamentName" />
+                </label>
+                <br>
+                <label>
+                    Date: <input type="date" id="tournamentDate" />
+                </label>
+                <br>
+                <button id="submitTournamentBtn">Create</button>
+                <button id="cancelTournamentBtn">Cancel</button>
+                <div id="createTournamentError" style="color:red;"></div>
+            </div>
         </div>
     </div>
     <script src="js/index.js"></script>

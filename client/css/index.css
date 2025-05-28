@@ -217,3 +217,92 @@ label {
 div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edit-player-error, #edit-tournament-error {
     color: var(--solarized-red) !important;
 }
+
+.player-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 0.5em;
+    background: var(--solarized-base02);
+    border-radius: 8px;
+    margin-bottom: 1em;
+}
+
+.player-table td {
+    border: none;
+    color: var(--solarized-base0);
+    vertical-align: middle;
+    font-size: 1em;
+}
+
+.player-position {
+    text-align: center;
+    font-weight: bold;
+    color: var(--solarized-yellow);
+    min-width: 90px;
+    word-break: break-word;
+}
+
+.player-name {
+    text-align: center;
+    font-weight: bold;
+    color: var(--solarized-yellow);
+    min-width: 90px;
+    word-break: break-word;
+}
+
+.player-points {
+    text-align: center;
+    color: var(--solarized-cyan);
+    font-weight: bold;
+    min-width: 70px;
+    text-align: center;
+}
+
+.player-deck a {
+    text-align: center;
+    color: var(--solarized-cyan);
+    text-decoration: underline;
+    font-size: 0.98em;
+}
+
+.player-edit button,
+.player-remove button {
+    min-width: 60px;
+    margin: 0 2px;
+    padding: 6px 10px;
+    font-size: 0.95em;
+}
+
+.player-edit button {
+    background: var(--solarized-blue);
+    color: var(--solarized-base3);
+}
+
+.player-edit button:hover {
+    background: var(--solarized-cyan);
+    color: var(--solarized-base03);
+}
+
+.player-remove button {
+    background: var(--solarized-red);
+    color: var(--solarized-base3);
+}
+
+.player-remove button:hover {
+    background: var(--solarized-orange);
+    color: var(--solarized-base03);
+}
+
+@media (max-width: 600px) {
+    .player-table td {
+        font-size: 0.98em;
+        padding: 0.4em 0.2em;
+    }
+    .player-name, .player-points {
+        min-width: 0;
+    }
+}
+
+#tournaments {
+    margin-bottom: 1rem
+}

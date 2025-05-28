@@ -45,28 +45,31 @@ async function fetchTournaments(userId) {
         const tournaments = await res.json();
         if (tournaments.length > 0) {
             document.getElementById('tournaments').innerHTML =
-                '<h2>Your Tournaments:</h2><ul id="tournament-list">' +
-                tournaments.map(t => {
-                    let dateStr = '';
-                    if (t.date) {
-                        const date = new Date(t.date.trim());
-                        dateStr = isNaN(date) ? 'Unknown date' : date.toLocaleString();
-                    } else {
-                        dateStr = 'Unknown date';
-                    }
-                    return `<li data-tournament-id="${t.id}">
-                        <a href="tournament/${t.id}" class="tournament-link">${t.title}</a>
-                        <span style="color:#888;">(${dateStr})</span>
-                        <button class="delete-tournament-btn" style="margin-left:10px;">Delete</button>
-                    </li>`;
-                }).join('') +
-                '</ul>';
+                `<h2>Your Tournaments:</h2>
+                <table class="tournament-table" style="width:100%;">
+                    <tbody>
+                        ${tournaments.map((t) => {
+                            let dateStr = '';
+                            if (t.date) {
+                                const date = new Date(t.date.trim());
+                                dateStr = isNaN(date) ? 'Unknown date' : date.toLocaleString();
+                            } else {
+                                dateStr = 'Unknown date';
+                            }
+                            return `<tr data-tournament-id="${t.id}">
+                                <td style="width:50%; text-align: center;"><a href="tournament/${t.id}" class="tournament-link">${t.title}</a></td>
+                                <td style="width:30%; text-align: center;"><span style="color:#888;">${dateStr}</span></td>
+                                <td style="width:20%;"><button class="delete-tournament-btn" style="margin-left:10px;">Delete</button></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>`;
             // Attach delete handlers
             document.querySelectorAll('.delete-tournament-btn').forEach(btn => {
                 btn.onclick = async function(e) {
                     e.preventDefault();
-                    const li = btn.closest('li[data-tournament-id]');
-                    const tournamentId = li.getAttribute('data-tournament-id');
+                    const tr = btn.closest('tr[data-tournament-id]');
+                    const tournamentId = tr.getAttribute('data-tournament-id');
                     if (confirm('Are you sure you want to delete this tournament? This cannot be undone.')) {
                         try {
                             const res = await fetch(`/api/tournament/${tournamentId}`, {
@@ -76,7 +79,7 @@ async function fetchTournaments(userId) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                li.remove();
+                                tr.remove();
                             } else {
                                 alert(data.error || 'Failed to delete tournament.');
                             }

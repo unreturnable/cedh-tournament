@@ -68,23 +68,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Players List
             if (Array.isArray(tournament.players) && tournament.players.length > 0) {
-                playersList.innerHTML = tournament.players.map(p => {
-                    let editBtn = '';
-                    let removeBtn = '';
-                    if (currentUserId && tournament.user === String(currentUserId)) {
-                        editBtn = `<button class="edit-player-btn" data-player-name="${encodeURIComponent(p.name)}" data-player-deck="${encodeURIComponent(p.deck || '')}" style="margin-left:8px;">Edit</button>`;
-                        removeBtn = `<button class="remove-player-btn" data-player-name="${encodeURIComponent(p.name)}" style="margin-left:8px;">Remove</button>`;
-                    }
-                    return `<li>
-                        ${typeof p === 'object' ? 
-                            `${p.name}${p.deck ? ` (<a href="${p.deck}" target="_blank">deck</a>)` : ''}` 
-                            : p}
-                        ${editBtn}
-                        ${removeBtn}
-                    </li>`;
-                }).join('');
+                // Sort players by points descending
+                const sortedPlayers = [...tournament.players].sort((a, b) => {
+                    const pointsA = typeof a === 'object' && a.points !== undefined ? a.points : 1000;
+                    const pointsB = typeof b === 'object' && b.points !== undefined ? b.points : 1000;
+                    return pointsB - pointsA;
+                });
+
+                playersList.innerHTML = `
+                    <table class="player-table">
+                        <tbody>
+                            ${sortedPlayers.map((p, idx) => {
+                                let editBtn = '';
+                                let removeBtn = '';
+                                if (currentUserId && tournament.user === String(currentUserId)) {
+                                    editBtn = `<button class="edit-player-btn" data-player-name="${encodeURIComponent(p.name)}" data-player-deck="${encodeURIComponent(p.deck || '')}">Edit</button>`;
+                                    removeBtn = `<button class="remove-player-btn" data-player-name="${encodeURIComponent(p.name)}">Remove</button>`;
+                                }
+                                const points = typeof p === 'object' && p.points !== undefined ? p.points : 1000;
+                                return `<tr>
+                                    <td class="player-position">${idx + 1}</td>
+                                    <td class="player-name">${p.name}</td>
+                                    <td class="player-points">${points} pts</td>
+                                    <td class="player-deck">${p.deck ? `<a href="${p.deck}" target="_blank">deck</a>` : ''}</td>
+                                    <td class="player-edit">${editBtn}</td>
+                                    <td class="player-remove">${removeBtn}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
             } else {
-                playersList.innerHTML = '<li>No players</li>';
+                playersList.innerHTML = '<div style="padding:1em;">No players</div>';
             }
 
             // Show/hide add player button
