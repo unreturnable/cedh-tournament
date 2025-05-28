@@ -7,6 +7,56 @@
 <body>
     <div id="main-content">
         <div id="tournament-info"></div>
+        <button id="edit-tournament-btn" style="display:none; margin-bottom:10px;">Edit Tournament</button>
+        <div id="edit-tournament-modal" class="modal" style="display:none;">
+            <h2>Edit Tournament</h2>
+            <label>
+                Name: <input type="text" id="edit-tournament-name-input" />
+            </label>
+            <br>
+            <label>
+                Date: <input type="date" id="edit-tournament-date-input" />
+            </label>
+            <br>
+            <button id="submit-edit-tournament-btn">Save</button>
+            <button id="cancel-edit-tournament-btn">Cancel</button>
+            <div id="edit-tournament-error" style="color:red;"></div>
+        </div>
+
+        <h3>Players:</h3>
+        <ul id="players-list"></ul>
+        <button id="add-player-btn" style="display:none; margin-left:10px;">Add Player</button>
+        <div id="add-player-modal" class="modal" style="display:none;">
+            <h2>Add Player</h2>
+            <label>
+                Name: <input type="text" id="player-name-input" />
+            </label>
+            <br>
+            <label>
+                Deck Link: <input type="url" id="deck-link-input" placeholder="https://..." />
+            </label>
+            <br>
+            <button id="submit-add-player-btn">Add</button>
+            <button id="cancel-add-player-btn">Cancel</button>
+            <div id="add-player-error" style="color:red;"></div>
+        </div>
+
+        <div id="edit-player-modal" class="modal" style="display:none;">
+            <h2>Edit Player</h2>
+            <label>
+                Name: <input type="text" id="edit-player-name-input" />
+            </label>
+            <br>
+            <label>
+                Deck Link: <input type="url" id="edit-deck-link-input" placeholder="https://..." />
+            </label>
+            <br>
+            <button id="submit-edit-player-btn">Save</button>
+            <button id="cancel-edit-player-btn">Cancel</button>
+            <div id="edit-player-error" style="color:red;"></div>
+        </div>
+
+        <div id="rounds-container"></div>
     </div>
     <script src="../js/tournament.js"></script>
 </body>

@@ -39,3 +39,24 @@ body.loading #main-content {
     padding: 0.5em;
     border: 1px solid #eee;
 }
+
+.modal {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, 0);
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 20px;
+    z-index: 1000;
+    min-width: 600px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+}
+
+.modal input[type="text"],
+.modal input[type="url"] {
+    display: block;
+    width: calc(100% - 40px); /* 20px margin on each side */
+    margin: 10px 20px 20px 20px;
+    box-sizing: border-box;
+}

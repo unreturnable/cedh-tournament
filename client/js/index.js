@@ -9,11 +9,13 @@ function showLogin() {
     document.getElementById('login').style.display = 'block';
     document.getElementById('logout').style.display = 'none';
     document.getElementById('tournaments').innerHTML = '';
+    document.getElementById('createTournamentBtn').style.display = 'none'; // Hide button
 }
 
 function showLogout() {
     document.getElementById('logout').style.display = 'block';
     document.getElementById('login').style.display = 'none';
+    document.getElementById('createTournamentBtn').style.display = 'inline-block'; // Show button
 }
 
 function saveToken(token, type) {
@@ -43,7 +45,7 @@ async function fetchTournaments(userId) {
         const tournaments = await res.json();
         if (tournaments.length > 0) {
             document.getElementById('tournaments').innerHTML =
-                '<h2>Your Tournaments:</h2><ul>' +
+                '<h2>Your Tournaments:</h2><ul id="tournament-list">' +
                 tournaments.map(t => {
                     let dateStr = '';
                     if (t.date) {
@@ -52,12 +54,38 @@ async function fetchTournaments(userId) {
                     } else {
                         dateStr = 'Unknown date';
                     }
-                    return `<li>
+                    return `<li data-tournament-id="${t.id}">
                         <a href="tournament/${t.id}" class="tournament-link">${t.title}</a>
                         <span style="color:#888;">(${dateStr})</span>
+                        <button class="delete-tournament-btn" style="margin-left:10px;">Delete</button>
                     </li>`;
                 }).join('') +
                 '</ul>';
+            // Attach delete handlers
+            document.querySelectorAll('.delete-tournament-btn').forEach(btn => {
+                btn.onclick = async function(e) {
+                    e.preventDefault();
+                    const li = btn.closest('li[data-tournament-id]');
+                    const tournamentId = li.getAttribute('data-tournament-id');
+                    if (confirm('Are you sure you want to delete this tournament? This cannot be undone.')) {
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}`, {
+                                method: 'DELETE',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                li.remove();
+                            } else {
+                                alert(data.error || 'Failed to delete tournament.');
+                            }
+                        } catch (err) {
+                            alert('Failed to delete tournament.');
+                        }
+                    }
+                };
+            });
         } else {
             document.getElementById('tournaments').innerHTML = '<h2>No tournaments found for your account.</h2>';
         }
@@ -157,3 +185,19 @@ document.getElementById('submitTournamentBtn').onclick = async function() {
         document.getElementById('createTournamentError').innerText = 'Failed to create tournament.';
     }
 };
+
+window.addEventListener('pageshow', async () => {
+    // Always close the create tournament modal
+    document.getElementById('createTournamentModal').style.display = 'none';
+    document.getElementById('createTournamentError').innerText = '';
+
+    // If user is logged in, refresh the tournament list
+    const tokenData = getToken();
+    if (tokenData.access_token && tokenData.token_type) {
+        // fetchUserInfo will also call fetchTournaments, but we only want to refresh tournaments
+        // Use the current userId if available
+        if (userId && userId !== 'unknown') {
+            await fetchTournaments(userId);
+        }
+    }
+});

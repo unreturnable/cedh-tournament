@@ -127,4 +127,115 @@ app.post('/api/tournament', async (req, res) => {
     }
 });
 
+// Delete a tournament by id (only if user owns it)
+app.delete('/api/tournament/:id', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to delete this tournament' });
+        }
+        await db.delete(`/${id}`);
+        return res.json({ success: true });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Add a player to a tournament (only if user owns it)
+app.post('/api/tournament/:id/add-player', async (req, res) => {
+    const { id } = req.params;
+    const { userId, playerName, deckLink } = req.body;
+    if (!userId || !playerName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to add players to this tournament' });
+        }
+        if (!Array.isArray(tournament.players)) tournament.players = [];
+        tournament.players.push({ name: playerName, deck: deckLink || '' });
+        await db.push(`/${id}/players`, tournament.players, true);
+        return res.json({ success: true, players: tournament.players });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Remove a player from a tournament (only if user owns it)
+app.post('/api/tournament/:id/remove-player', async (req, res) => {
+    const { id } = req.params;
+    const { userId, playerName } = req.body;
+    if (!userId || !playerName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to remove players from this tournament' });
+        }
+        if (!Array.isArray(tournament.players)) tournament.players = [];
+        const initialLength = tournament.players.length;
+        tournament.players = tournament.players.filter(p => p.name !== playerName);
+        if (tournament.players.length === initialLength) {
+            return res.status(404).json({ error: 'Player not found' });
+        }
+        await db.push(`/${id}/players`, tournament.players, true);
+        return res.json({ success: true, players: tournament.players });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Edit a player in a tournament (only if user owns it)
+app.post('/api/tournament/:id/edit-player', async (req, res) => {
+    const { id } = req.params;
+    const { userId, oldName, newName, newDeck } = req.body;
+    if (!userId || !oldName || !newName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to edit players in this tournament' });
+        }
+        if (!Array.isArray(tournament.players)) tournament.players = [];
+        const player = tournament.players.find(p => p.name === oldName);
+        if (!player) {
+            return res.status(404).json({ error: 'Player not found' });
+        }
+        player.name = newName;
+        player.deck = newDeck || '';
+        await db.push(`/${id}/players`, tournament.players, true);
+        return res.json({ success: true, players: tournament.players });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Edit tournament details (only if user owns it)
+app.post('/api/tournament/:id/edit', async (req, res) => {
+    const { id } = req.params;
+    const { userId, title, date } = req.body;
+    if (!userId || !title || !date) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to edit this tournament' });
+        }
+        tournament.title = title;
+        tournament.date = date;
+        await db.push(`/${id}`, tournament, true);
+        return res.json({ success: true, tournament });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
 app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));
