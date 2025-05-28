@@ -1,10 +1,58 @@
-.btn {
-    display: inline-block;
-    padding: 10px 24px;
-    font-size: 16px;
-    font-weight: bold;
-    color: #fff;
-    background-color: #5865F2;
+:root {
+    --solarized-base03: #002b36;
+    --solarized-base02: #073642;
+    --solarized-base01: #586e75;
+    --solarized-base00: #657b83;
+    --solarized-base0:  #839496;
+    --solarized-base1:  #93a1a1;
+    --solarized-base2:  #eee8d5;
+    --solarized-base3:  #fdf6e3;
+    --solarized-yellow: #b58900;
+    --solarized-orange: #cb4b16;
+    --solarized-red:    #dc322f;
+    --solarized-magenta:#d33682;
+    --solarized-violet: #6c71c4;
+    --solarized-blue:   #268bd2;
+    --solarized-cyan:   #2aa198;
+    --solarized-green:  #859900;
+}
+
+html, body {
+    background: var(--solarized-base03);
+    color: var(--solarized-base0);
+    max-width: 100vw;
+    overflow-x: hidden;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+}
+
+#main-content {
+    padding: 10px;
+    box-sizing: border-box;
+    background: var(--solarized-base03);
+}
+
+h1, h2, h3 {
+    word-break: break-word;
+    color: var(--solarized-yellow);
+}
+
+ul {
+    padding-left: 1.2em;
+}
+
+li {
+    word-break: break-word;
+    color: var(--solarized-base0);
+}
+
+.btn,
+button {
+    font-size: 1rem;
+    padding: 10px 16px;
+    min-width: 44px;
+    min-height: 44px;
+    background: var(--solarized-blue);
+    color: var(--solarized-base3);
     border: none;
     border-radius: 5px;
     text-decoration: none;
@@ -13,8 +61,17 @@
     transition: background 0.2s;
 }
 
-.btn:hover {
-    background-color: #4752c4;
+.btn {
+    display: inline-block;
+    padding: 10px 24px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.btn:hover,
+button:hover {
+    background: var(--solarized-cyan);
+    color: var(--solarized-base03);
 }
 
 .discord-logo {
@@ -23,7 +80,9 @@
     height: 22px;
     margin-right: 8px;
     margin-bottom: 3px;
+    filter: brightness(0) invert(1);
 }
+
 body.loading #main-content {
     display: none;
 }
@@ -31,13 +90,17 @@ body.loading #main-content {
 .round {
     margin-bottom: 2em;
     padding: 1em;
-    border: 1px solid #ccc;
+    border: 1px solid var(--solarized-base01);
+    background: var(--solarized-base02);
+    border-radius: 8px;
 }
 
 .pod {
     margin-bottom: 1em;
     padding: 0.5em;
-    border: 1px solid #eee;
+    border: 1px solid var(--solarized-base01);
+    background: var(--solarized-base03);
+    border-radius: 6px;
 }
 
 .modal {
@@ -45,18 +108,112 @@ body.loading #main-content {
     top: 20%;
     left: 50%;
     transform: translate(-50%, 0);
-    background: #fff;
-    border: 1px solid #ccc;
+    background: var(--solarized-base02);
+    border: 1px solid var(--solarized-blue);
     padding: 20px;
     z-index: 1000;
+    color: var(--solarized-base0);
+    border-radius: 10px;
+    box-shadow: 0 2px 16px rgba(0,43,54,0.8);
     min-width: 600px;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+}
+
+.modal {
+    min-width: 90vw;
+    max-width: 500px;
+    width: 95vw;
+    left: 50%;
+    top: 10%;
+    transform: translate(-50%, 0);
+    padding: 16px;
+}
+
+@media (max-width: 600px) {
+    .modal {
+        min-width: 0;
+        width: 98vw;
+        max-width: 98vw;
+        left: 50%;
+        top: 5%;
+        padding: 10px;
+    }
+    .btn,
+    button {
+        font-size: 1.1em;
+        padding: 12px 8px;
+    }
+    #main-content {
+        padding: 2vw;
+    }
+    h1 {
+        font-size: 1.4em;
+    }
+    h2 {
+        font-size: 1.2em;
+    }
+    h3 {
+        font-size: 1.1em;
+    }
 }
 
 .modal input[type="text"],
-.modal input[type="url"] {
-    display: block;
-    width: calc(100% - 40px); /* 20px margin on each side */
+.modal input[type="url"],
+.modal input[type="date"] {
+    width: calc(100% - 40px);
     margin: 10px 20px 20px 20px;
-    box-sizing: border-box;
+    font-size: 1em;
+    min-height: 36px;
+    background: var(--solarized-base03);
+    color: var(--solarized-base0);
+    border: 1px solid var(--solarized-blue);
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+
+@media (max-width: 600px) {
+    .modal input[type="text"],
+    .modal input[type="url"],
+    .modal input[type="date"] {
+        width: calc(100% - 16px);
+        margin: 8px 8px 16px 8px;
+        font-size: 1em;
+        min-height: 36px;
+    }
+}
+
+a {
+    color: var(--solarized-cyan);
+    text-decoration: underline;
+}
+
+a:hover {
+    color: var(--solarized-yellow);
+}
+
+label {
+    color: var(--solarized-green);
+}
+
+#tournaments h2,
+#tournaments h3 {
+    color: var(--solarized-orange);
+}
+
+#tournaments ul {
+    background: var(--solarized-base02);
+    border-radius: 8px;
+    padding: 1em;
+}
+
+#tournaments li {
+    border-bottom: 1px solid var(--solarized-base01);
+    padding: 0.5em 0;
+}
+
+#tournaments li:last-child {
+    border-bottom: none;
+}
+
+div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edit-player-error, #edit-tournament-error {
+    color: var(--solarized-red) !important;
 }
