@@ -239,19 +239,51 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
 });
 
 /**
- * Split an array of player names into pods of 3 (or 4 if needed).
+ * Split an array of player names into pods:
+ * - Maximise the number of 4 pods
+ * - If the remaining players after all 4 pods are created totals 3, put them in a 3 pod
+ * - Any other remaining players are put into a two pod or left on their own
  * @param {string[]} playerNames
  * @returns {string[][]} Array of pods (arrays of player names)
  */
 function splitPods(playerNames) {
     const shuffled = [...playerNames].sort(() => Math.random() - 0.5);
     const pods = [];
-    for (let i = 0; i < shuffled.length; i += 3) {
-        pods.push(shuffled.slice(i, i + 3));
+    let i = 0;
+    const n = shuffled.length;
+    let podNumber = 1;
+
+    let numFours = Math.floor(n / 4);
+
+    for (let j = 0; j < numFours; j++) {
+        pods.push({
+            label: `Pod ${podNumber++}`,
+            players: shuffled.slice(i, i + 4)
+        });
+        i += 4;
     }
-    if (pods.length > 1 && pods[pods.length - 1].length === 1) {
-        pods[pods.length - 2] = pods[pods.length - 2].concat(pods.pop());
+
+    const remaining = n - i;
+    if (remaining === 3) {
+        pods.push({
+            label: `Pod ${podNumber++}`,
+            players: shuffled.slice(i, i + 3)
+        });
+        i += 3;
+    } else if (remaining === 2) {
+        pods.push({
+            label: 'Bye',
+            players: shuffled.slice(i, i + 2)
+        });
+        i += 2;
+    } else if (remaining === 1) {
+        pods.push({
+            label: 'Bye',
+            players: [shuffled[i]]
+        });
+        i += 1;
     }
+
     return pods;
 }
 
@@ -279,7 +311,8 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
         const roundData = {
             round: roundNumber,
             pods: pods.map(pod => ({
-                players: pod,
+                players: pod.players,
+                label: pod.label,
                 result: '',
                 winner: ''
             }))
@@ -354,7 +387,8 @@ app.post('/api/tournament/:id/drop-player', async (req, res) => {
             return {
                 ...round,
                 pods: pods.map(pod => ({
-                    players: pod,
+                    players: pod.players,
+                    label: pod.label,
                     result: '',
                     winner: ''
                 }))
@@ -400,7 +434,8 @@ app.post('/api/tournament/:id/undrop-player', async (req, res) => {
             return {
                 ...round,
                 pods: pods.map(pod => ({
-                    players: pod,
+                    players: pod.players,
+                    label: pod.label,
                     result: '',
                     winner: ''
                 }))

@@ -136,46 +136,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </table>
                 `;
 
-                // Show/hide add player button (move it inside the collapsible container)
-                // Only show if user is owner AND tournament has NOT started (no rounds)
-                if (
-                    currentUserId &&
-                    tournament.user === String(currentUserId) &&
-                    (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0)
-                ) {
-                    addPlayerBtn.style.display = '';
-                    // Wrap the button in a div for centering
-                    let addPlayerBtnWrapper = document.createElement('div');
-                    addPlayerBtnWrapper.style.display = 'flex';
-                    addPlayerBtnWrapper.style.justifyContent = 'center';
-                    addPlayerBtnWrapper.style.marginTop = '10px';
-                    addPlayerBtnWrapper.appendChild(addPlayerBtn);
-                    playersTableContainer.appendChild(addPlayerBtnWrapper);
-                } else {
-                    addPlayerBtn.style.display = 'none';
-                }
-
-                // Collapse/expand logic for players section
-                playersToggleBtn.onclick = function() {
-                    playersCollapsed = !playersCollapsed;
-                    playersTableContainer.style.display = playersCollapsed ? 'none' : 'block';
-                    playersToggleBtn.innerHTML = playersCollapsed ? '&#9654;' : '&#9660;';
-                };
-
                 // Clear and rebuild playersList area
                 playersList.innerHTML = '';
                 playersList.appendChild(playersHeaderDiv);
                 playersList.appendChild(playersTableContainer);
             } else {
                 playersList.innerHTML = '<div style="padding:1em;">No players</div>';
+            }
+
+            // Show/hide add player button (move it outside the players check)
+            // Only show if user is owner AND tournament has NOT started (no rounds)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0)
+            ) {
+                addPlayerBtn.style.display = '';
+                // Wrap the button in a div for centering
+                let addPlayerBtnWrapper = document.createElement('div');
+                addPlayerBtnWrapper.style.display = 'flex';
+                addPlayerBtnWrapper.style.justifyContent = 'center';
+                addPlayerBtnWrapper.style.marginTop = '10px';
+                addPlayerBtnWrapper.appendChild(addPlayerBtn);
+                playersList.appendChild(addPlayerBtnWrapper);
+            } else {
                 addPlayerBtn.style.display = 'none';
             }
 
             // Rounds
             roundsContainer.innerHTML = '';
             if (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0) {
-                // No rounds yet: show "Start Tournament" button if user is owner
-                if (currentUserId && tournament.user === String(currentUserId)) {
+                // No rounds yet: show "Start Tournament" button if user is owner AND at least 3 players
+                if (
+                    currentUserId &&
+                    tournament.user === String(currentUserId) &&
+                    Array.isArray(tournament.players) &&
+                    tournament.players.length >= 3
+                ) {
                     const startBtn = document.createElement('button');
                     startBtn.textContent = 'Start Tournament';
                     startBtn.className = 'start-tournament-btn';
@@ -203,6 +200,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     btnWrapper.style.justifyContent = 'center';
                     btnWrapper.appendChild(startBtn);
                     roundsContainer.appendChild(btnWrapper);
+                } else if (
+                    currentUserId &&
+                    tournament.user === String(currentUserId) &&
+                    (!Array.isArray(tournament.players) || tournament.players.length < 3)
+                ) {
+                    // Show message if not enough players
+                    roundsContainer.innerHTML = '<div style="padding:1em;">At least 3 players are required to start the tournament.</div>';
                 } else {
                     roundsContainer.innerHTML = '<div style="padding:1em;">Tournament has not started yet.</div>';
                 }
@@ -273,7 +277,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const podDiv = document.createElement('div');
                         podDiv.className = 'pod';
                         podDiv.innerHTML = `
-                          <h3>Pod ${podIdx + 1}</h3>
+                          <h3>${pod.label ? pod.label : `Pod ${podIdx + 1}`}</h3>
                           <ul>
                             ${pod.players.map(player => `<li>${typeof player === 'object' ? player.name : player}</li>`).join('')}
                           </ul>
