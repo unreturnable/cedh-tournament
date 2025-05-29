@@ -304,9 +304,61 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
         }
         if (!Array.isArray(tournament.rounds)) tournament.rounds = [];
 
-        // Use splitPods function
-        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
+        // --- Apply points for previous round ---
+        if (tournament.rounds.length > 0) {
+            const prevRound = tournament.rounds[tournament.rounds.length - 1];
+            if (!prevRound.pointsChanges) prevRound.pointsChanges = [];
+            // Map player names to player objects
+            const playerMap = {};
+            tournament.players.forEach(p => { playerMap[p.name] = p; });
+            // Also include droppedPlayers for points changes
+            if (Array.isArray(tournament.droppedPlayers)) {
+                tournament.droppedPlayers.forEach(p => { playerMap[p.name] = p; });
+            }
+            // Apply pod results
+            prevRound.pods.forEach(pod => {
+                if (pod.label === 'Bye') {
+                    // Bye: +5% points
+                    (pod.players || []).forEach(name => {
+                        const p = playerMap[name];
+                        if (!p) return;
+                        const change = Math.round(p.points * 0.05);
+                        prevRound.pointsChanges.push({ name, change });
+                        p.points = (p.points || 1000) + change;
+                    });
+                    pod.result = 'bye';
+                } else if (pod.result === 'win' && pod.winner) {
+                    // Winner steals 10% of each other player's points
+                    let totalStolen = 0;
+                    (pod.players || []).forEach(name => {
+                        if (name === pod.winner) return;
+                        const p = playerMap[name];
+                        if (!p) return;
+                        const loss = Math.round((p.points || 1000) * 0.10);
+                        prevRound.pointsChanges.push({ name, change: -loss });
+                        p.points = (p.points || 1000) - loss;
+                        totalStolen += loss;
+                    });
+                    const winnerObj = playerMap[pod.winner];
+                    if (winnerObj) {
+                        prevRound.pointsChanges.push({ name: pod.winner, change: totalStolen });
+                        winnerObj.points = (winnerObj.points || 1000) + totalStolen;
+                    }
+                } else if (pod.result === 'draw') {
+                    // All lose 5%
+                    (pod.players || []).forEach(name => {
+                        const p = playerMap[name];
+                        if (!p) return;
+                        const loss = Math.round((p.points || 1000) * 0.05);
+                        prevRound.pointsChanges.push({ name, change: -loss });
+                        p.points = (p.points || 1000) - loss;
+                    });
+                }
+            });
+        }
 
+        // --- Create new round ---
+        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
         const roundNumber = tournament.rounds.length + 1;
         const roundData = {
             round: roundNumber,
@@ -315,11 +367,12 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
                 label: pod.label,
                 result: '',
                 winner: ''
-            }))
+            })),
+            pointsChanges: []
         };
 
         tournament.rounds.push(roundData);
-        await db.push(`/${id}/rounds`, tournament.rounds, true);
+        await db.push(`/${id}`, tournament, true);
 
         return res.json({ success: true, round: roundData, rounds: tournament.rounds });
     } catch (error) {
@@ -346,8 +399,25 @@ app.post('/api/tournament/:id/cancelRound', async (req, res) => {
         if (String(lastRound.round) !== String(round)) {
             return res.status(400).json({ error: 'Only the last round can be cancelled' });
         }
+        // Revert points using pointsChanges
+        if (lastRound.pointsChanges && lastRound.pointsChanges.length > 0) {
+            // Map player names to player objects
+            const playerMap = {};
+            if (Array.isArray(tournament.players)) {
+                tournament.players.forEach(p => { playerMap[p.name] = p; });
+            }
+            if (Array.isArray(tournament.droppedPlayers)) {
+                tournament.droppedPlayers.forEach(p => { playerMap[p.name] = p; });
+            }
+            lastRound.pointsChanges.forEach(change => {
+                const p = playerMap[change.name];
+                if (p) {
+                    p.points = (p.points || 1000) - change.change;
+                }
+            });
+        }
         tournament.rounds.pop();
-        await db.push(`/${id}/rounds`, tournament.rounds, true);
+        await db.push(`/${id}`, tournament, true);
         return res.json({ success: true, rounds: tournament.rounds });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -415,6 +485,42 @@ app.post('/api/tournament/:id/undrop-player', async (req, res) => {
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Report pod result (win/draw)
+app.post('/api/tournament/:id/report-pod-result', async (req, res) => {
+    const { id } = req.params;
+    const { userId, round, podIdx, result, winner } = req.body;
+    if (!userId || !round || podIdx === undefined || !result) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        if (!Array.isArray(tournament.rounds)) return res.status(400).json({ error: 'No rounds' });
+        const roundObj = tournament.rounds.find(r => String(r.round) === String(round));
+        if (!roundObj) return res.status(404).json({ error: 'Round not found' });
+        const pod = roundObj.pods[podIdx];
+        if (!pod || pod.label === 'Bye') return res.status(400).json({ error: 'Invalid pod' });
+        if (pod.result) return res.status(400).json({ error: 'Result already reported' });
+
+        if (result === 'win') {
+            if (!winner) return res.status(400).json({ error: 'Missing winner' });
+            pod.result = 'win';
+            pod.winner = winner;
+        } else if (result === 'draw') {
+            pod.result = 'draw';
+            pod.winner = '';
+        } else {
+            return res.status(400).json({ error: 'Invalid result' });
+        }
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+        return res.json({ success: true, pod });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
     }

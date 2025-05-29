@@ -289,16 +289,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const player = pod.players[seatIdx];
                             if (!player) continue; // Skip empty seats
                             const seatLabel = `Seat ${seatIdx + 1}`;
-                            gridHtml += `<div class="pod-seat" style="border: 1px solid #ccc; border-radius: 4px; padding: 6px; min-width: 80px; min-height: 32px; background: #f9f9f9;">
-                                <strong>${seatLabel}:</strong> ${typeof player === 'object' ? player.name : player}
+                            let highlight = '';
+                            let crown = '';
+                            if (pod.result === 'win' && pod.winner === (typeof player === 'object' ? player.name : player)) {
+                                highlight = `background: var(--solarized-yellow); color: var(--solarized-base03); font-weight: bold;`;
+                                crown = ' 👑';
+                            } else if (pod.result === 'draw') {
+                                highlight = `background: var(--solarized-violet); color: var(--solarized-base3); font-weight: bold;`;
+                            }
+                            gridHtml += `<div class="pod-seat" style="border: 1px solid #ccc; border-radius: 4px; padding: 6px; min-width: 80px; min-height: 32px; ${highlight}">
+                                <strong>${seatLabel}:</strong> ${typeof player === 'object' ? player.name : player}${crown}
                             </div>`;
                         }
                         gridHtml += '</div>';
 
+                        // Result reporting buttons (not for Bye pods, only if not already reported and user is owner)
+                        let resultBtns = '';
+                        if (
+                            pod.label !== 'Bye' &&
+                            !pod.result &&
+                            currentUserId &&
+                            tournament.user === String(currentUserId) &&
+                            roundIdx === tournament.rounds.length - 1 // Only for current round
+                        ) {
+                            resultBtns = `
+                                <div class="pod-result-btns" style="margin-bottom:8px;">
+                                    <button class="report-win-btn" data-pod-idx="${podIdx}">Win</button>
+                                    <button class="report-draw-btn" data-pod-idx="${podIdx}">Draw</button>
+                                </div>
+                            `;
+                        }
+
                         podDiv.innerHTML = `
                           <h3>${pod.label ? pod.label : `Pod ${podIdx + 1}`}</h3>
                           ${gridHtml}
-                          <p>Result: ${pod.result}${pod.winner ? ` (Winner: ${pod.winner})` : ''}</p>
+                          ${resultBtns}
+                          <p>Result: ${
+                            pod.result === 'win'
+                                ? `Win (Winner: ${pod.winner})`
+                                : pod.result === 'draw'
+                                    ? 'Draw'
+                                    : pod.result === 'bye'
+                                        ? 'Bye'
+                                        : 'Not reported'
+                          }</p>
                         `;
                         podsContainer.appendChild(podDiv);
                     });
@@ -634,6 +668,95 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
                 nextRoundBtnWrapper.appendChild(nextRoundBtn);
                 roundsContainer.appendChild(nextRoundBtnWrapper);
+            }
+
+            // Attach result reporting logic (only for current round and owner)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                Array.isArray(tournament.rounds) &&
+                tournament.rounds.length > 0
+            ) {
+                const currentRoundIdx = tournament.rounds.length - 1;
+                const currentRound = tournament.rounds[currentRoundIdx];
+                const pods = document.querySelectorAll('.pod');
+                pods.forEach((podDiv, podIdx) => {
+                    const pod = currentRound.pods[podIdx];
+                    if (!pod || pod.label === 'Bye' || pod.result) return;
+                    // Win button
+                    const winBtn = podDiv.querySelector('.report-win-btn');
+                    if (winBtn) {
+                        winBtn.onclick = function () {
+                            // Show modal with player buttons
+                            const modal = document.getElementById('pod-win-modal');
+                            const modalPlayers = document.getElementById('pod-win-modal-players');
+                            const modalError = document.getElementById('pod-win-modal-error');
+                            modalError.innerText = '';
+                            modalPlayers.innerHTML = '';
+                            (pod.players || []).forEach(player => {
+                                const name = typeof player === 'object' ? player.name : player;
+                                const btn = document.createElement('button');
+                                btn.textContent = name;
+                                btn.onclick = async function () {
+                                    try {
+                                        const res = await fetch(`/api/tournament/${tournamentId}/report-pod-result`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                userId: currentUserId,
+                                                round: currentRound.round,
+                                                podIdx,
+                                                result: 'win',
+                                                winner: name
+                                            })
+                                        });
+                                        const data = await res.json();
+                                        if (data.success) {
+                                            modal.style.display = 'none';
+                                            renderTournament();
+                                        } else {
+                                            modalError.innerText = data.error || 'Failed to report result.';
+                                        }
+                                    } catch (err) {
+                                        modalError.innerText = 'Failed to report result.';
+                                    }
+                                };
+                                modalPlayers.appendChild(btn);
+                            });
+                            modal.style.display = 'block';
+                            document.getElementById('pod-win-modal-cancel').onclick = function () {
+                                modal.style.display = 'none';
+                            };
+                        };
+                    }
+                    // Draw button
+                    const drawBtn = podDiv.querySelector('.report-draw-btn');
+                    if (drawBtn) {
+                        drawBtn.onclick = async function () {
+                            if (!confirm('Mark this pod as a draw?')) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/report-pod-result`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        userId: currentUserId,
+                                        round: currentRound.round,
+                                        podIdx,
+                                        result: 'draw'
+                                    })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    alert(data.error || 'Failed to report result.');
+                                }
+                            } catch (err) {
+                                alert('Failed to report result.');
+                            }
+                        };
+                    }
+                });
             }
         } catch (err) {
             if (infoDiv) infoDiv.innerHTML = '<h2>Error loading tournament data.</h2>';
