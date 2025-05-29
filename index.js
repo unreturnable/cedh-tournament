@@ -304,6 +304,17 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
         }
         if (!Array.isArray(tournament.rounds)) tournament.rounds = [];
 
+        // --- Prevent next round if not all pod results are reported ---
+        if (tournament.rounds.length > 0) {
+            const lastRound = tournament.rounds[tournament.rounds.length - 1];
+            const unreported = (lastRound.pods || []).some(
+                pod => pod.label !== 'Bye' && !pod.result
+            );
+            if (unreported) {
+                return res.status(400).json({ error: 'All pod results must be reported before starting the next round.' });
+            }
+        }
+
         // --- Apply points for previous round ---
         if (tournament.rounds.length > 0) {
             const prevRound = tournament.rounds[tournament.rounds.length - 1];
@@ -519,6 +530,34 @@ app.post('/api/tournament/:id/report-pod-result', async (req, res) => {
         } else {
             return res.status(400).json({ error: 'Invalid result' });
         }
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+        return res.json({ success: true, pod });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Undo pod result (only for current round and owner)
+app.post('/api/tournament/:id/undo-pod-result', async (req, res) => {
+    const { id } = req.params;
+    const { userId, round, podIdx } = req.body;
+    if (!userId || round === undefined || podIdx === undefined) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        if (!Array.isArray(tournament.rounds)) return res.status(400).json({ error: 'No rounds' });
+        const roundObj = tournament.rounds.find(r => String(r.round) === String(round));
+        if (!roundObj) return res.status(404).json({ error: 'Round not found' });
+        const pod = roundObj.pods[podIdx];
+        if (!pod || pod.label === 'Bye') return res.status(400).json({ error: 'Invalid pod' });
+        if (!pod.result) return res.status(400).json({ error: 'No result to undo' });
+
+        pod.result = '';
+        pod.winner = '';
         await db.push(`/${id}/rounds`, tournament.rounds, true);
         return res.json({ success: true, pod });
     } catch (error) {

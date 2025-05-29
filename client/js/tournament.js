@@ -682,7 +682,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const pods = document.querySelectorAll('.pod');
                 pods.forEach((podDiv, podIdx) => {
                     const pod = currentRound.pods[podIdx];
-                    if (!pod || pod.label === 'Bye' || pod.result) return;
+                    if (!pod) return;
+
+                    // Undo Result button (if result submitted)
+                    if (pod.result) {
+                        let undoBtn = podDiv.querySelector('.undo-pod-result-btn');
+                        if (!undoBtn) {
+                            undoBtn = document.createElement('button');
+                            undoBtn.className = 'undo-pod-result-btn';
+                            undoBtn.textContent = 'Undo Result';
+                            undoBtn.style.marginLeft = '8px';
+                            podDiv.appendChild(undoBtn);
+                        }
+                        undoBtn.onclick = async function () {
+                            if (!confirm('Undo this pod result?')) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/undo-pod-result`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        userId: currentUserId,
+                                        round: currentRound.round,
+                                        podIdx
+                                    })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    alert(data.error || 'Failed to undo pod result.');
+                                }
+                            } catch (err) {
+                                alert('Failed to undo pod result.');
+                            }
+                        };
+                    }
+
                     // Win button
                     const winBtn = podDiv.querySelector('.report-win-btn');
                     if (winBtn) {
