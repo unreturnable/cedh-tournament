@@ -262,6 +262,8 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
     color: var(--solarized-red) !important;
 }
 
+ul { padding:0 }
+
 .player-table {
     width: 100%;
     border-collapse: separate;
