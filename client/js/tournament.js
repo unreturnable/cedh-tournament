@@ -695,7 +695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             podDiv.appendChild(undoBtn);
                         }
                         undoBtn.onclick = async function () {
-                            if (!confirm('Undo this pod result?')) return;
+                            // Removed confirm dialog
                             try {
                                 const res = await fetch(`/api/tournament/${tournamentId}/undo-pod-result`, {
                                     method: 'POST',
@@ -768,7 +768,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const drawBtn = podDiv.querySelector('.report-draw-btn');
                     if (drawBtn) {
                         drawBtn.onclick = async function () {
-                            if (!confirm('Mark this pod as a draw?')) return;
+                            // Removed confirm dialog
                             try {
                                 const res = await fetch(`/api/tournament/${tournamentId}/report-pod-result`, {
                                     method: 'POST',

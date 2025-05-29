@@ -315,6 +315,20 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
             }
         }
 
+        // --- Create new round ---
+        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
+        const roundNumber = tournament.rounds.length + 1;
+        const roundData = {
+            round: roundNumber,
+            pods: pods.map(pod => ({
+                players: pod.players,
+                label: pod.label,
+                result: '',
+                winner: ''
+            })),
+            pointsChanges: []
+        };
+
         // --- Apply points for previous round ---
         if (tournament.rounds.length > 0) {
             const prevRound = tournament.rounds[tournament.rounds.length - 1];
@@ -334,7 +348,7 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
                         const p = playerMap[name];
                         if (!p) return;
                         const change = Math.round(p.points * 0.05);
-                        prevRound.pointsChanges.push({ name, change });
+                        roundData.pointsChanges.push({ name, change });
                         p.points = (p.points || 1000) + change;
                     });
                     pod.result = 'bye';
@@ -346,13 +360,13 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
                         const p = playerMap[name];
                         if (!p) return;
                         const loss = Math.round((p.points || 1000) * 0.10);
-                        prevRound.pointsChanges.push({ name, change: -loss });
+                        roundData.pointsChanges.push({ name, change: -loss });
                         p.points = (p.points || 1000) - loss;
                         totalStolen += loss;
                     });
                     const winnerObj = playerMap[pod.winner];
                     if (winnerObj) {
-                        prevRound.pointsChanges.push({ name: pod.winner, change: totalStolen });
+                        roundData.pointsChanges.push({ name: pod.winner, change: totalStolen });
                         winnerObj.points = (winnerObj.points || 1000) + totalStolen;
                     }
                 } else if (pod.result === 'draw') {
@@ -361,26 +375,21 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
                         const p = playerMap[name];
                         if (!p) return;
                         const loss = Math.round((p.points || 1000) * 0.05);
-                        prevRound.pointsChanges.push({ name, change: -loss });
+                        roundData.pointsChanges.push({ name, change: -loss });
                         p.points = (p.points || 1000) - loss;
                     });
                 }
             });
         }
 
-        // --- Create new round ---
-        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
-        const roundNumber = tournament.rounds.length + 1;
-        const roundData = {
-            round: roundNumber,
-            pods: pods.map(pod => ({
-                players: pod.players,
-                label: pod.label,
-                result: '',
-                winner: ''
-            })),
-            pointsChanges: []
-        };
+        // Deduct 5% from each dropped player for this round
+        if (Array.isArray(tournament.droppedPlayers)) {
+            tournament.droppedPlayers.forEach(p => {
+                const loss = Math.round((p.points || 1000) * 0.05);
+                roundData.pointsChanges.push({ name: p.name, change: -loss, dropped: true });
+                p.points = (p.points || 1000) - loss;
+            });
+        }
 
         tournament.rounds.push(roundData);
         await db.push(`/${id}`, tournament, true);
@@ -408,7 +417,7 @@ app.post('/api/tournament/:id/cancelRound', async (req, res) => {
         }
         const lastRound = tournament.rounds[tournament.rounds.length - 1];
         if (String(lastRound.round) !== String(round)) {
-            return res.status(400).json({ error: 'Only the last round can be cancelled' });
+            return res.status(400).json({ error: 'Only the lastest round can be cancelled' });
         }
         // Revert points using pointsChanges
         if (lastRound.pointsChanges && lastRound.pointsChanges.length > 0) {
