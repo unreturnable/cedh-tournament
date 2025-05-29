@@ -4,6 +4,23 @@ const tokenData = {
 };
 let currentUserId = null;
 
+// Collapse/expand players list
+const toggleBtn = document.getElementById('toggle-players-list');
+const playersSection = document.getElementById('players-section');
+let playersCollapsed = false;
+
+// Logout logic (same as index.js)
+document.getElementById('logout').onclick = () => {
+    localStorage.removeItem('discord_access_token');
+    localStorage.removeItem('discord_token_type');
+    window.location.href = '/';
+};
+
+// Show logout button if logged in
+if (localStorage.getItem('discord_access_token')) {
+    document.getElementById('logout').style.display = 'block';
+}
+
 // Fetch user info if logged in
 async function getCurrentUserId() {
     if (tokenData.access_token && tokenData.token_type) {
@@ -75,7 +92,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return pointsB - pointsA;
                 });
 
-                playersList.innerHTML = `
+                // Build players section header with collapse button
+                const playersHeaderDiv = document.createElement('div');
+                playersHeaderDiv.className = 'round-header'; // reuse round style
+
+                const playersToggleBtn = document.createElement('button');
+                playersToggleBtn.className = 'round-toggle-btn';
+                playersToggleBtn.innerHTML = playersCollapsed ? '&#9654;' : '&#9660;';
+
+                const playersTitle = document.createElement('h2');
+                playersTitle.textContent = 'Players';
+                playersTitle.style.margin = 0;
+
+                playersHeaderDiv.appendChild(playersToggleBtn);
+                playersHeaderDiv.appendChild(playersTitle);
+
+                // Players table container
+                const playersTableContainer = document.createElement('div');
+                playersTableContainer.id = 'players-table-container';
+                playersTableContainer.style.display = playersCollapsed ? 'none' : 'block';
+
+                playersTableContainer.innerHTML = `
                     <table class="player-table">
                         <tbody>
                             ${sortedPlayers.map((p, idx) => {
@@ -90,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     <td class="player-position">${idx + 1}</td>
                                     <td class="player-name">${p.name}</td>
                                     <td class="player-points">${points} pts</td>
-                                    <td class="player-deck">${p.deck ? `<a href="${p.deck}" target="_blank">deck</a>` : ''}</td>
+                                    <td class="player-deck">${p.deck ? `<a href="${p.deck}" target="_blank">Deck List</a>` : ''}</td>
                                     <td class="player-edit">${editBtn}</td>
                                     <td class="player-remove">${removeBtn}</td>
                                 </tr>`;
@@ -98,37 +135,165 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </tbody>
                     </table>
                 `;
+
+                // Show/hide add player button (move it inside the collapsible container)
+                // Only show if user is owner AND tournament has NOT started (no rounds)
+                if (
+                    currentUserId &&
+                    tournament.user === String(currentUserId) &&
+                    (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0)
+                ) {
+                    addPlayerBtn.style.display = '';
+                    // Wrap the button in a div for centering
+                    let addPlayerBtnWrapper = document.createElement('div');
+                    addPlayerBtnWrapper.style.display = 'flex';
+                    addPlayerBtnWrapper.style.justifyContent = 'center';
+                    addPlayerBtnWrapper.style.marginTop = '10px';
+                    addPlayerBtnWrapper.appendChild(addPlayerBtn);
+                    playersTableContainer.appendChild(addPlayerBtnWrapper);
+                } else {
+                    addPlayerBtn.style.display = 'none';
+                }
+
+                // Collapse/expand logic for players section
+                playersToggleBtn.onclick = function() {
+                    playersCollapsed = !playersCollapsed;
+                    playersTableContainer.style.display = playersCollapsed ? 'none' : 'block';
+                    playersToggleBtn.innerHTML = playersCollapsed ? '&#9654;' : '&#9660;';
+                };
+
+                // Clear and rebuild playersList area
+                playersList.innerHTML = '';
+                playersList.appendChild(playersHeaderDiv);
+                playersList.appendChild(playersTableContainer);
             } else {
                 playersList.innerHTML = '<div style="padding:1em;">No players</div>';
-            }
-
-            // Show/hide add player button
-            if (currentUserId && tournament.user === String(currentUserId)) {
-                addPlayerBtn.style.display = '';
-            } else {
                 addPlayerBtn.style.display = 'none';
             }
 
             // Rounds
             roundsContainer.innerHTML = '';
-            tournament.rounds.forEach((round, roundIdx) => {
-                const roundDiv = document.createElement('div');
-                roundDiv.className = 'round';
-                roundDiv.innerHTML = `<h2>Round ${round.round}</h2>`;
-                round.pods.forEach((pod, podIdx) => {
-                    const podDiv = document.createElement('div');
-                    podDiv.className = 'pod';
-                    podDiv.innerHTML = `
-                      <h3>Pod ${podIdx + 1}</h3>
-                      <ul>
-                        ${pod.players.map(player => `<li>${typeof player === 'object' ? player.name : player}</li>`).join('')}
-                      </ul>
-                      <p>Result: ${pod.result}${pod.winner ? ` (Winner: ${pod.winner})` : ''}</p>
-                    `;
-                    roundDiv.appendChild(podDiv);
+            if (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0) {
+                // No rounds yet: show "Start Tournament" button if user is owner
+                if (currentUserId && tournament.user === String(currentUserId)) {
+                    const startBtn = document.createElement('button');
+                    startBtn.textContent = 'Start Tournament';
+                    startBtn.className = 'start-tournament-btn';
+                    startBtn.onclick = async function() {
+                        if (confirm('Are you sure you want to start the tournament? This will lock the tournament settings and you will not be able to edit the tournament name, date, or player list.')) {
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    alert(data.error || 'Failed to start tournament.');
+                                }
+                            } catch (err) {
+                                alert('Failed to start tournament.');
+                            }
+                        }
+                    };
+                    const btnWrapper = document.createElement('div');
+                    btnWrapper.style.display = 'flex';
+                    btnWrapper.style.justifyContent = 'center';
+                    btnWrapper.appendChild(startBtn);
+                    roundsContainer.appendChild(btnWrapper);
+                } else {
+                    roundsContainer.innerHTML = '<div style="padding:1em;">Tournament has not started yet.</div>';
+                }
+                // Hide edit tournament button if not started
+                editTournamentBtn.style.display = (currentUserId && tournament.user === String(currentUserId)) ? '' : 'none';
+            } else {
+                // Tournament started: hide edit tournament button
+                editTournamentBtn.style.display = 'none';
+                tournament.rounds.forEach((round, roundIdx) => {
+                    const roundDiv = document.createElement('div');
+                    roundDiv.className = 'round';
+                    roundDiv.style.position = 'relative';
+
+                    // Collapsible logic
+                    let collapsed = false;
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'round-header';
+                    headerDiv.style.position = 'relative'; // Ensure positioning context
+
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.className = 'round-toggle-btn';
+                    toggleBtn.innerHTML = '&#9660;';
+
+                    const title = document.createElement('h2');
+                    title.textContent = `Round ${round.round}`;
+                    title.style.margin = 0;
+
+                    headerDiv.appendChild(toggleBtn);
+                    headerDiv.appendChild(title);
+
+                    // Add "Cancel Round" button if this is the last round and user is owner
+                    if (
+                        currentUserId &&
+                        tournament.user === String(currentUserId) &&
+                        roundIdx === tournament.rounds.length - 1
+                    ) {
+                        const cancelBtn = document.createElement('button');
+                        cancelBtn.className = 'cancel-round-btn';
+                        cancelBtn.textContent = 'Cancel Round';
+                        cancelBtn.style.zIndex = 2; // Ensure it's above other elements
+                        headerDiv.appendChild(cancelBtn); // <-- append to headerDiv, not roundDiv
+                        cancelBtn.onclick = async function () {
+                            if (confirm('Are you sure you want to cancel this round? This will remove all data for this round.')) {
+                                try {
+                                    const res = await fetch(`/api/tournament/${tournamentId}/cancelRound`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ userId: currentUserId, round: round.round })
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        renderTournament();
+                                    } else {
+                                        alert(data.error || 'Failed to cancel round.');
+                                    }
+                                } catch (err) {
+                                    alert('Failed to cancel round.');
+                                }
+                            }
+                        };
+                    }
+
+                    // Pods/results container
+                    const podsContainer = document.createElement('div');
+                    podsContainer.className = 'pods-container';
+
+                    round.pods.forEach((pod, podIdx) => {
+                        const podDiv = document.createElement('div');
+                        podDiv.className = 'pod';
+                        podDiv.innerHTML = `
+                          <h3>Pod ${podIdx + 1}</h3>
+                          <ul>
+                            ${pod.players.map(player => `<li>${typeof player === 'object' ? player.name : player}</li>`).join('')}
+                          </ul>
+                          <p>Result: ${pod.result}${pod.winner ? ` (Winner: ${pod.winner})` : ''}</p>
+                        `;
+                        podsContainer.appendChild(podDiv);
+                    });
+
+                    // Toggle logic
+                    toggleBtn.onclick = function () {
+                        collapsed = !collapsed;
+                        podsContainer.style.display = collapsed ? 'none' : 'flex';
+                        toggleBtn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+                    };
+
+                    roundDiv.appendChild(headerDiv);
+                    roundDiv.appendChild(podsContainer);
+                    roundsContainer.appendChild(roundDiv);
                 });
-                roundsContainer.appendChild(roundDiv);
-            });
+            }
 
             // --- Button Logic ---
 
@@ -139,6 +304,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById('edit-tournament-error').innerText = '';
                     document.getElementById('edit-tournament-name-input').value = tournament.title;
                     document.getElementById('edit-tournament-date-input').value = tournament.date ? tournament.date.split('T')[0] : '';
+                    // Focus first input
+                    document.getElementById('edit-tournament-name-input').focus();
                 };
                 document.getElementById('cancel-edit-tournament-btn').onclick = function() {
                     editTournamentModal.style.display = 'none';
@@ -177,6 +344,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     document.getElementById('add-player-error').innerText = '';
                     document.getElementById('player-name-input').value = '';
                     document.getElementById('deck-link-input').value = '';
+                    // Focus first input
+                    document.getElementById('player-name-input').focus();
                 };
                 document.getElementById('cancel-add-player-btn').onclick = function() {
                     addPlayerModal.style.display = 'none';
@@ -209,7 +378,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Remove Player
-            if (currentUserId && tournament.user === String(currentUserId)) {
+            // Only allow remove if user is owner AND tournament has NOT started (no rounds)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0)
+            ) {
                 playersList.querySelectorAll('.remove-player-btn').forEach(btn => {
                     btn.onclick = async function() {
                         const playerName = decodeURIComponent(btn.getAttribute('data-player-name'));
@@ -231,10 +405,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     };
                 });
+            } else {
+                // Hide/remove all remove buttons if not allowed
+                playersList.querySelectorAll('.remove-player-btn').forEach(btn => {
+                    btn.style.display = 'none';
+                });
             }
 
             // Edit Player
-            if (currentUserId && tournament.user === String(currentUserId)) {
+            // Only allow edit if user is owner AND tournament has NOT started (no rounds)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0)
+            ) {
                 playersList.querySelectorAll('.edit-player-btn').forEach(btn => {
                     btn.onclick = function() {
                         editingOldName = decodeURIComponent(btn.getAttribute('data-player-name'));
@@ -243,6 +427,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         document.getElementById('edit-deck-link-input').value = deck;
                         editPlayerModal.style.display = 'block';
                         document.getElementById('edit-player-error').innerText = '';
+                        // Focus first input
+                        document.getElementById('edit-player-name-input').focus();
                     };
                 });
 
@@ -275,6 +461,158 @@ document.addEventListener('DOMContentLoaded', async () => {
                         document.getElementById('edit-player-error').innerText = 'Failed to edit player.';
                     }
                 };
+            } else {
+                // Hide/remove all edit buttons if not allowed
+                playersList.querySelectorAll('.edit-player-btn').forEach(btn => {
+                    btn.style.display = 'none';
+                });
+            }
+
+            // --- DROPPED PLAYERS SECTION ---
+            // Show dropped players if any
+            if (Array.isArray(tournament.droppedPlayers) && tournament.droppedPlayers.length > 0) {
+                const droppedHeader = document.createElement('h3');
+                droppedHeader.textContent = 'Dropped Players';
+                droppedHeader.style.color = 'var(--solarized-red)';
+                playersList.appendChild(droppedHeader);
+
+                // Build dropped players table (same style as players table)
+                const droppedTableContainer = document.createElement('div');
+                droppedTableContainer.style.marginBottom = '1em';
+                droppedTableContainer.innerHTML = `
+                    <table class="player-table">
+                        <tbody>
+                            ${tournament.droppedPlayers.map((p, idx) => {
+                                const player = typeof p === 'object' ? p : { name: p, points: 1000, deck: '' };
+                                let undropBtn = '';
+                                if (
+                                    currentUserId &&
+                                    tournament.user === String(currentUserId) &&
+                                    (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0 || !tournament.ended)
+                                ) {
+                                    undropBtn = `<button class="undrop-player-btn" data-player-name="${encodeURIComponent(player.name)}">Undrop</button>`;
+                                }
+                                const points = player.points !== undefined ? player.points : 1000;
+                                return `<tr>
+                                    <td class="player-position">${idx + 1}</td>
+                                    <td class="player-name">${player.name}</td>
+                                    <td class="player-points">${points} pts</td>
+                                    <td class="player-deck">${player.deck ? `<a href="${player.deck}" target="_blank">Deck List</a>` : ''}</td>
+                                    <td class="player-edit"></td>
+                                    <td class="player-remove">${undropBtn}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+                playersList.appendChild(droppedTableContainer);
+
+                // Attach undrop logic to undrop buttons
+                droppedTableContainer.querySelectorAll('.undrop-player-btn').forEach(btn => {
+                    btn.onclick = async function () {
+                        const playerName = decodeURIComponent(btn.getAttribute('data-player-name'));
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}/undrop-player`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUserId, playerName })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                renderTournament();
+                            } else {
+                                alert(data.error || 'Failed to undrop player.');
+                            }
+                        } catch (err) {
+                            alert('Failed to undrop player.');
+                        }
+                    };
+                });
+            }
+
+            // --- DROP PLAYER BUTTONS ---
+            // Add drop buttons to players table (only if tournament started and user is owner)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                Array.isArray(tournament.rounds) &&
+                tournament.rounds.length > 0
+            ) {
+                playersList.querySelectorAll('.player-table tr').forEach(row => {
+                    const nameCell = row.querySelector('.player-name');
+                    if (!nameCell) return;
+                    const playerName = nameCell.textContent;
+                    // Only add drop button if not already dropped
+                    if (
+                        !tournament.droppedPlayers ||
+                        !tournament.droppedPlayers.some(p => (typeof p === 'object' ? p.name : p) === playerName)
+                    ) {
+                        const dropCell = document.createElement('td');
+                        const dropBtn = document.createElement('button');
+                        dropBtn.textContent = 'Drop';
+                        dropBtn.className = 'drop-player-btn';
+                        dropBtn.onclick = async function () {
+                            if (!confirm(`Drop player "${playerName}" from the tournament?`)) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/drop-player`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId, playerName })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    alert(data.error || 'Failed to drop player.');
+                                }
+                            } catch (err) {
+                                alert('Failed to drop player.');
+                            }
+                        };
+                        dropCell.appendChild(dropBtn);
+                        row.appendChild(dropCell);
+                    }
+                });
+            }
+
+            // --- NEXT ROUND BUTTON ---
+            // Show "Next Round" button after the last round if user is owner
+            if (
+                Array.isArray(tournament.rounds) &&
+                tournament.rounds.length > 0 &&
+                currentUserId &&
+                tournament.user === String(currentUserId)
+            ) {
+                // Only show if tournament is not ended (optional: check for ended flag)
+                const nextRoundBtnWrapper = document.createElement('div');
+                nextRoundBtnWrapper.style.display = 'flex';
+                nextRoundBtnWrapper.style.justifyContent = 'center';
+                nextRoundBtnWrapper.style.margin = '16px 0';
+
+                const nextRoundBtn = document.createElement('button');
+                nextRoundBtn.textContent = 'Next Round';
+                nextRoundBtn.className = 'next-round-btn';
+                nextRoundBtn.onclick = async function () {
+                    if (confirm('Start the next round?')) {
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUserId })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                renderTournament();
+                            } else {
+                                alert(data.error || 'Failed to start next round.');
+                            }
+                        } catch (err) {
+                            alert('Failed to start next round.');
+                        }
+                    }
+                };
+                nextRoundBtnWrapper.appendChild(nextRoundBtn);
+                roundsContainer.appendChild(nextRoundBtnWrapper);
             }
         } catch (err) {
             if (infoDiv) infoDiv.innerHTML = '<h2>Error loading tournament data.</h2>';

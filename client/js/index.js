@@ -157,6 +157,9 @@ document.getElementById('login').onclick = function(e) {
 
 document.getElementById('createTournamentBtn').onclick = function() {
     document.getElementById('createTournamentModal').style.display = 'block';
+    // Focus the first input in the modal by default
+    const firstInput = document.querySelector('#createTournamentModal input[type="text"], #createTournamentModal input[type="date"], #createTournamentModal input, #createTournamentModal select');
+    if (firstInput) firstInput.focus();
 };
 
 document.getElementById('cancelTournamentBtn').onclick = function() {

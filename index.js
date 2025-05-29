@@ -238,4 +238,183 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
     }
 });
 
+/**
+ * Split an array of player names into pods of 3 (or 4 if needed).
+ * @param {string[]} playerNames
+ * @returns {string[][]} Array of pods (arrays of player names)
+ */
+function splitPods(playerNames) {
+    const shuffled = [...playerNames].sort(() => Math.random() - 0.5);
+    const pods = [];
+    for (let i = 0; i < shuffled.length; i += 3) {
+        pods.push(shuffled.slice(i, i + 3));
+    }
+    if (pods.length > 1 && pods[pods.length - 1].length === 1) {
+        pods[pods.length - 2] = pods[pods.length - 2].concat(pods.pop());
+    }
+    return pods;
+}
+
+// Create the next round for a tournament (only if user owns it)
+app.post('/api/tournament/:id/nextRound', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to create a round for this tournament' });
+        }
+        if (!Array.isArray(tournament.players) || tournament.players.length < 3) {
+            return res.status(400).json({ error: 'Not enough players to create a round' });
+        }
+        if (!Array.isArray(tournament.rounds)) tournament.rounds = [];
+
+        // Use splitPods function
+        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
+
+        const roundNumber = tournament.rounds.length + 1;
+        const roundData = {
+            round: roundNumber,
+            pods: pods.map(pod => ({
+                players: pod,
+                result: '',
+                winner: ''
+            }))
+        };
+
+        tournament.rounds.push(roundData);
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+
+        return res.json({ success: true, round: roundData, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Cancel the last round for a tournament (only if user owns it and it's the last round)
+app.post('/api/tournament/:id/cancelRound', async (req, res) => {
+    const { id } = req.params;
+    const { userId, round } = req.body;
+    if (!userId || !round) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to cancel a round for this tournament' });
+        }
+        if (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0) {
+            return res.status(400).json({ error: 'No rounds to cancel' });
+        }
+        const lastRound = tournament.rounds[tournament.rounds.length - 1];
+        if (String(lastRound.round) !== String(round)) {
+            return res.status(400).json({ error: 'Only the last round can be cancelled' });
+        }
+        tournament.rounds.pop();
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+        return res.json({ success: true, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Drop a player from a tournament (move to droppedPlayers, only if user owns it and tournament started)
+app.post('/api/tournament/:id/drop-player', async (req, res) => {
+    const { id } = req.params;
+    const { userId, playerName } = req.body;
+    if (!userId || !playerName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to drop players from this tournament' });
+        }
+        // Tournament must have started (at least one round)
+        if (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0) {
+            return res.status(400).json({ error: 'Cannot drop players before tournament starts' });
+        }
+        if (!Array.isArray(tournament.players)) tournament.players = [];
+        if (!Array.isArray(tournament.droppedPlayers)) tournament.droppedPlayers = [];
+        const idx = tournament.players.findIndex(p => p.name === playerName);
+        if (idx === -1) {
+            return res.status(404).json({ error: 'Player not found' });
+        }
+        // Move player to droppedPlayers
+        const [player] = tournament.players.splice(idx, 1);
+        tournament.droppedPlayers.push(player);
+
+        // Redo pods for all rounds
+        const activePlayers = tournament.players.map(p => p.name);
+        tournament.rounds = tournament.rounds.map((round, i) => {
+            const pods = splitPods(activePlayers);
+            return {
+                ...round,
+                pods: pods.map(pod => ({
+                    players: pod,
+                    result: '',
+                    winner: ''
+                }))
+            };
+        });
+
+        await db.push(`/${id}/players`, tournament.players, true);
+        await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+
+        return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Undrop a player (move from droppedPlayers back to players, only if user owns it)
+app.post('/api/tournament/:id/undrop-player', async (req, res) => {
+    const { id } = req.params;
+    const { userId, playerName } = req.body;
+    if (!userId || !playerName) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized to undrop players in this tournament' });
+        }
+        if (!Array.isArray(tournament.droppedPlayers)) tournament.droppedPlayers = [];
+        if (!Array.isArray(tournament.players)) tournament.players = [];
+        const idx = tournament.droppedPlayers.findIndex(p => p.name === playerName);
+        if (idx === -1) {
+            return res.status(404).json({ error: 'Player not found in dropped list' });
+        }
+        // Move player back to players
+        const [player] = tournament.droppedPlayers.splice(idx, 1);
+        tournament.players.push(player);
+
+        // Redo pods for all rounds
+        const activePlayers = tournament.players.map(p => p.name);
+        tournament.rounds = tournament.rounds.map((round, i) => {
+            const pods = splitPods(activePlayers);
+            return {
+                ...round,
+                pods: pods.map(pod => ({
+                    players: pod,
+                    result: '',
+                    winner: ''
+                }))
+            };
+        });
+
+        await db.push(`/${id}/players`, tournament.players, true);
+        await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
+        await db.push(`/${id}/rounds`, tournament.rounds, true);
+
+        return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
 app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));

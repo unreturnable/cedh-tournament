@@ -95,12 +95,54 @@ body.loading #main-content {
     border-radius: 8px;
 }
 
+/* --- Round Header --- */
+.round-header {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+/* --- Toggle Button for Rounds --- */
+.round-toggle-btn {
+    margin-right: 0.5em;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-size: 1.2em;
+}
+
+/* --- Cancel Round Button --- */
+.cancel-round-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* --- Pods Container --- */
+.pods-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
+}
+
+/* --- Pod Card --- */
 .pod {
-    margin-bottom: 1em;
-    padding: 0.5em;
-    border: 1px solid var(--solarized-base01);
+    flex: 1 1 250px;
+    min-width: 220px;
+    max-width: 350px;
+    box-sizing: border-box;
     background: var(--solarized-base03);
+    border: 1px solid #ddd;
     border-radius: 6px;
+    padding: 1em;
+    margin-bottom: 1em;
 }
 
 .modal {
@@ -115,12 +157,8 @@ body.loading #main-content {
     color: var(--solarized-base0);
     border-radius: 10px;
     box-shadow: 0 2px 16px rgba(0,43,54,0.8);
-    min-width: 600px;
-}
-
-.modal {
-    min-width: 90vw;
-    max-width: 500px;
+    min-width: 500px;
+    max-width: 800px;
     width: 95vw;
     left: 50%;
     top: 10%;
@@ -131,8 +169,8 @@ body.loading #main-content {
 @media (max-width: 600px) {
     .modal {
         min-width: 0;
-        width: 98vw;
-        max-width: 98vw;
+        width: 90vw;
+        max-width: 90vw;
         left: 50%;
         top: 5%;
         padding: 10px;
@@ -159,7 +197,7 @@ body.loading #main-content {
 .modal input[type="text"],
 .modal input[type="url"],
 .modal input[type="date"] {
-    width: calc(100% - 40px);
+    width: calc(100% - 60px);
     margin: 10px 20px 20px 20px;
     font-size: 1em;
     min-height: 36px;
@@ -174,7 +212,7 @@ body.loading #main-content {
     .modal input[type="text"],
     .modal input[type="url"],
     .modal input[type="date"] {
-        width: calc(100% - 16px);
+        width: calc(100% - 40px);
         margin: 8px 8px 16px 8px;
         font-size: 1em;
         min-height: 36px;
@@ -192,6 +230,13 @@ a:hover {
 
 label {
     color: var(--solarized-green);
+}
+
+.start-tournament-btn {
+    background: var(--solarized-green);
+    color: var(--solarized-base3);
+    width: 200px;
+    height: 100px
 }
 
 #tournaments h2,
@@ -238,7 +283,7 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
     text-align: center;
     font-weight: bold;
     color: var(--solarized-yellow);
-    min-width: 90px;
+    min-width: 20px;
     word-break: break-word;
 }
 
@@ -246,7 +291,7 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
     text-align: center;
     font-weight: bold;
     color: var(--solarized-yellow);
-    min-width: 90px;
+    min-width: 80px;
     word-break: break-word;
 }
 
@@ -254,7 +299,7 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
     text-align: center;
     color: var(--solarized-cyan);
     font-weight: bold;
-    min-width: 70px;
+    min-width: 80px;
     text-align: center;
 }
 
@@ -267,7 +312,7 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
 
 .player-edit button,
 .player-remove button {
-    min-width: 60px;
+    min-width: 30px;
     margin: 0 2px;
     padding: 6px 10px;
     font-size: 0.95em;
@@ -283,6 +328,7 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
     color: var(--solarized-base03);
 }
 
+.drop-player-btn,
 .player-remove button {
     background: var(--solarized-red);
     color: var(--solarized-base3);
