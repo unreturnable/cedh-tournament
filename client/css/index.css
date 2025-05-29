@@ -358,3 +358,18 @@ ul { padding:0 }
     background-color: var(--solarized-base02) !important;
     color: var(--solarized-base3);
 }
+
+.pod-seat-winner {
+    background-color: var(--solarized-yellow) !important;
+    color: var(--solarized-base3);
+}
+
+.pod-seat-loser {
+    background-color: var(--solarized-red) !important;
+    color: var(--solarized-base3);
+}
+
+.pod-seat-draw {
+    background-color: var(--solarized-violet) !important;
+    color: var(--solarized-base3);
+}

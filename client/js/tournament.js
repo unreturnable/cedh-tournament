@@ -289,16 +289,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const player = pod.players[seatIdx];
                             if (!player) continue; // Skip empty seats
                             const seatLabel = `Seat ${seatIdx + 1}`;
-                            let highlight = '';
+                            let seatClass = 'pod-seat';
                             let crown = '';
-                            if (pod.result === 'win' && pod.winner === (typeof player === 'object' ? player.name : player)) {
-                                highlight = `background: var(--solarized-yellow); color: var(--solarized-base03); font-weight: bold;`;
-                                crown = ' 👑';
+                            if (
+                                (pod.result === 'win' && pod.winner === (typeof player === 'object' ? player.name : player)) ||
+                                pod.result === 'bye'
+                            ) {
+                                seatClass += ' pod-seat-winner';
+                                crown = '👑 ';
                             } else if (pod.result === 'draw') {
-                                highlight = `background: var(--solarized-violet); color: var(--solarized-base3); font-weight: bold;`;
+                                seatClass += ' pod-seat-draw';
+                            } else if (pod.result === 'win' && pod.winner !== (typeof player === 'object' ? player.name : player)) {
+                                seatClass += ' pod-seat-loser';
                             }
-                            gridHtml += `<div class="pod-seat" style="border: 1px solid #ccc; border-radius: 4px; padding: 6px; min-width: 80px; min-height: 32px; ${highlight}">
-                                <strong>${seatLabel}:</strong> ${typeof player === 'object' ? player.name : player}${crown}
+                            gridHtml += `<div class="${seatClass}" style="border: 1px solid #ccc; border-radius: 4px; padding: 6px; min-width: 80px; min-height: 32px;">
+                                <strong>${crown}${seatLabel}:</strong> ${typeof player === 'object' ? player.name : player}
                             </div>`;
                         }
                         gridHtml += '</div>';
@@ -679,13 +684,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             ) {
                 const currentRoundIdx = tournament.rounds.length - 1;
                 const currentRound = tournament.rounds[currentRoundIdx];
-                const pods = document.querySelectorAll('.pod');
+                // Find the pods for the current round only
+                const roundDivs = roundsContainer.querySelectorAll('.round');
+                const currentRoundDiv = roundDivs[roundDivs.length - 1];
+                const pods = currentRoundDiv ? currentRoundDiv.querySelectorAll('.pod') : [];
                 pods.forEach((podDiv, podIdx) => {
                     const pod = currentRound.pods[podIdx];
                     if (!pod) return;
 
                     // Undo Result button (if result submitted)
-                    if (pod.result) {
+                    if (pod.result && pod.result !== 'bye') {
                         let undoBtn = podDiv.querySelector('.undo-pod-result-btn');
                         if (!undoBtn) {
                             undoBtn = document.createElement('button');

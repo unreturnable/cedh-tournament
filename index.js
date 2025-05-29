@@ -273,12 +273,14 @@ function splitPods(playerNames) {
     } else if (remaining === 2) {
         pods.push({
             label: 'Bye',
+            result: 'bye',
             players: shuffled.slice(i, i + 2)
         });
         i += 2;
     } else if (remaining === 1) {
         pods.push({
             label: 'Bye',
+            result: 'bye',
             players: [shuffled[i]]
         });
         i += 1;
@@ -323,7 +325,7 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
             pods: pods.map(pod => ({
                 players: pod.players,
                 label: pod.label,
-                result: '',
+                result: pod.result || '',
                 winner: ''
             })),
             pointsChanges: []
