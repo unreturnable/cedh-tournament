@@ -380,24 +380,8 @@ app.post('/api/tournament/:id/drop-player', async (req, res) => {
         const [player] = tournament.players.splice(idx, 1);
         tournament.droppedPlayers.push(player);
 
-        // Redo pods for all rounds
-        const activePlayers = tournament.players.map(p => p.name);
-        tournament.rounds = tournament.rounds.map((round, i) => {
-            const pods = splitPods(activePlayers);
-            return {
-                ...round,
-                pods: pods.map(pod => ({
-                    players: pod.players,
-                    label: pod.label,
-                    result: '',
-                    winner: ''
-                }))
-            };
-        });
-
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
-        await db.push(`/${id}/rounds`, tournament.rounds, true);
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {
@@ -427,24 +411,8 @@ app.post('/api/tournament/:id/undrop-player', async (req, res) => {
         const [player] = tournament.droppedPlayers.splice(idx, 1);
         tournament.players.push(player);
 
-        // Redo pods for all rounds
-        const activePlayers = tournament.players.map(p => p.name);
-        tournament.rounds = tournament.rounds.map((round, i) => {
-            const pods = splitPods(activePlayers);
-            return {
-                ...round,
-                pods: pods.map(pod => ({
-                    players: pod.players,
-                    label: pod.label,
-                    result: '',
-                    winner: ''
-                }))
-            };
-        });
-
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
-        await db.push(`/${id}/rounds`, tournament.rounds, true);
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {

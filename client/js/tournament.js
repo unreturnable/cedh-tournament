@@ -100,6 +100,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 playersToggleBtn.className = 'round-toggle-btn';
                 playersToggleBtn.innerHTML = playersCollapsed ? '&#9654;' : '&#9660;';
 
+                playersToggleBtn.onclick = function () {
+                    playersCollapsed = !playersCollapsed;
+                    playersToggleBtn.innerHTML = playersCollapsed ? '&#9654;' : '&#9660;';
+                    playersTableContainer.style.display = playersCollapsed ? 'none' : 'block';
+                };
+
                 const playersTitle = document.createElement('h2');
                 playersTitle.textContent = 'Players';
                 playersTitle.style.margin = 0;
@@ -276,11 +282,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     round.pods.forEach((pod, podIdx) => {
                         const podDiv = document.createElement('div');
                         podDiv.className = 'pod';
+
+                        // Build a 2x2 grid for seats (show only filled seats)
+                        let gridHtml = '<div class="pod-seat-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">';
+                        for (let seatIdx = 0; seatIdx < 4; seatIdx++) {
+                            const player = pod.players[seatIdx];
+                            if (!player) continue; // Skip empty seats
+                            const seatLabel = `Seat ${seatIdx + 1}`;
+                            gridHtml += `<div class="pod-seat" style="border: 1px solid #ccc; border-radius: 4px; padding: 6px; min-width: 80px; min-height: 32px; background: #f9f9f9;">
+                                <strong>${seatLabel}:</strong> ${typeof player === 'object' ? player.name : player}
+                            </div>`;
+                        }
+                        gridHtml += '</div>';
+
                         podDiv.innerHTML = `
                           <h3>${pod.label ? pod.label : `Pod ${podIdx + 1}`}</h3>
-                          <ul>
-                            ${pod.players.map(player => `<li>${typeof player === 'object' ? player.name : player}</li>`).join('')}
-                          </ul>
+                          ${gridHtml}
                           <p>Result: ${pod.result}${pod.winner ? ` (Winner: ${pod.winner})` : ''}</p>
                         `;
                         podsContainer.appendChild(podDiv);

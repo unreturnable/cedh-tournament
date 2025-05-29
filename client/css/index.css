@@ -351,3 +351,8 @@ div[style*="color:red"], .error, #createTournamentError, #add-player-error, #edi
 #tournaments {
     margin-bottom: 1rem
 }
+
+.pod-seat {
+    background-color: var(--solarized-base02) !important;
+    color: var(--solarized-base3);
+}
