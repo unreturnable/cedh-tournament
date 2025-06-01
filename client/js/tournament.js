@@ -230,14 +230,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     let collapsed = false;
                     const headerDiv = document.createElement('div');
                     headerDiv.className = 'round-header';
-                    headerDiv.style.position = 'relative'; // Ensure positioning context
+                    headerDiv.style.position = 'relative';
 
                     const toggleBtn = document.createElement('button');
                     toggleBtn.className = 'round-toggle-btn';
                     toggleBtn.innerHTML = '&#9660;';
 
                     const title = document.createElement('h2');
-                    title.textContent = `Round ${round.round}`;
+                    // Use special label if present, otherwise default to "Round X"
+                    title.textContent = round.label ? round.label : `Round ${round.round}`;
                     title.style.margin = 0;
 
                     headerDiv.appendChild(toggleBtn);
@@ -635,8 +636,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // --- NEXT ROUND BUTTON ---
-            // Show "Next Round" button after the last round if user is owner
+            // --- NEXT ROUND & TOP CUT BUTTONS ---
             if (
                 Array.isArray(tournament.rounds) &&
                 tournament.rounds.length > 0 &&
@@ -649,13 +649,90 @@ document.addEventListener('DOMContentLoaded', async () => {
                 nextRoundBtnWrapper.style.justifyContent = 'center';
                 nextRoundBtnWrapper.style.margin = '16px 0';
 
-                const nextRoundBtn = document.createElement('button');
-                nextRoundBtn.textContent = 'Next Round';
-                nextRoundBtn.className = 'next-round-btn';
-                nextRoundBtn.onclick = async function () {
-                    if (confirm('Start the next round?')) {
+                // Check if top cut has been performed
+                const isTopCut = !!tournament.topCut;
+
+                // Check if the last round is the final
+                const lastRound = tournament.rounds[tournament.rounds.length - 1];
+                const isFinalRound = lastRound && lastRound.label === 'Final';
+
+                if (!isTopCut) {
+                    // Next Round button
+                    const nextRoundBtn = document.createElement('button');
+                    nextRoundBtn.textContent = 'Next Round';
+                    nextRoundBtn.className = 'next-round-btn';
+                    nextRoundBtn.onclick = async function () {
+                        if (confirm('Start the next round?')) {
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    alert(data.error || 'Failed to start next round.');
+                                }
+                            } catch (err) {
+                                alert('Failed to start next round.');
+                            }
+                        }
+                    };
+                    nextRoundBtnWrapper.appendChild(nextRoundBtn);
+
+                    // Top Cut button
+                    const topCutBtn = document.createElement('button');
+                    topCutBtn.textContent = 'Top Cut';
+                    topCutBtn.className = 'top-cut-btn';
+                    topCutBtn.style.marginLeft = '8px';
+                    topCutBtn.onclick = function () {
+                        document.getElementById('top-cut-modal').style.display = 'block';
+                        document.getElementById('top-cut-error').innerText = '';
+                    };
+                    nextRoundBtnWrapper.appendChild(topCutBtn);
+
+                    roundsContainer.appendChild(nextRoundBtnWrapper);
+
+                    // Modal logic
+                    document.getElementById('cancel-top-cut-btn').onclick = function () {
+                        document.getElementById('top-cut-modal').style.display = 'none';
+                        document.getElementById('top-cut-error').innerText = '';
+                    };
+                    document.getElementById('submit-top-cut-btn').onclick = async function () {
+                        const autoFinalCount = parseInt(document.getElementById('auto-final-count').value, 10);
+                        const semiFinalCount = parseInt(document.getElementById('semi-final-count').value, 10);
+                        if (isNaN(autoFinalCount) || isNaN(semiFinalCount) || autoFinalCount < 0 || semiFinalCount < 0) {
+                            document.getElementById('top-cut-error').innerText = 'Please enter valid numbers.';
+                            return;
+                        }
                         try {
-                            const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                            const res = await fetch(`/api/tournament/${tournamentId}/topcut`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUserId, autoFinalCount, semiFinalCount })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                document.getElementById('top-cut-modal').style.display = 'none';
+                                renderTournament();
+                            } else {
+                                document.getElementById('top-cut-error').innerText = data.error || 'Failed to create top cut.';
+                            }
+                        } catch (err) {
+                            document.getElementById('top-cut-error').innerText = 'Failed to create top cut.';
+                        }
+                    };
+                } else if (!isFinalRound) {
+                    // Only show "Go to final" button if top cut performed and not already in final
+                    const goToFinalBtn = document.createElement('button');
+                    goToFinalBtn.textContent = 'Go to final';
+                    goToFinalBtn.className = 'go-to-final-btn';
+                    goToFinalBtn.onclick = async function () {
+                        if (!confirm('Create the final round?')) return;
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}/final`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ userId: currentUserId })
@@ -664,15 +741,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (data.success) {
                                 renderTournament();
                             } else {
-                                alert(data.error || 'Failed to start next round.');
+                                alert(data.error || 'Failed to create final round.');
                             }
                         } catch (err) {
-                            alert('Failed to start next round.');
+                            alert('Failed to create final round.');
                         }
-                    }
-                };
-                nextRoundBtnWrapper.appendChild(nextRoundBtn);
-                roundsContainer.appendChild(nextRoundBtnWrapper);
+                    };
+                    nextRoundBtnWrapper.appendChild(goToFinalBtn);
+                    roundsContainer.appendChild(nextRoundBtnWrapper);
+                }
             }
 
             // Attach result reporting logic (only for current round and owner)
@@ -693,7 +770,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!pod) return;
 
                     // Undo Result button (if result submitted)
-                    if (pod.result && pod.result !== 'bye') {
+                    if (
+                        pod.result && 
+                        pod.result !== 'bye' && 
+                        pod.label !== 'Automatically qualified for final' // <-- Add this condition
+                    ) {
                         let undoBtn = podDiv.querySelector('.undo-pod-result-btn');
                         if (!undoBtn) {
                             undoBtn = document.createElement('button');

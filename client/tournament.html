@@ -73,6 +73,25 @@
             <button id="pod-win-modal-cancel">Cancel</button>
             <div id="pod-win-modal-error" style="color:red;"></div>
         </div>
+
+        <div id="top-cut-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <h2>Top Cut</h2>
+                <label>
+                    Number of players to auto-qualify for final:
+                    <input type="number" id="auto-final-count" min="0" value="2">
+                </label>
+                <br>
+                <label>
+                    Number of players to progress to semi-final:
+                    <input type="number" id="semi-final-count" min="0" value="8">
+                </label>
+                <br>
+                <div id="top-cut-error" style="color:red;"></div>
+                <button id="submit-top-cut-btn">Create Semi-Final</button>
+                <button id="cancel-top-cut-btn">Cancel</button>
+            </div>
+        </div>
     </div>
     <script src="../js/tournament.js"></script>
 </body>
