@@ -22,6 +22,9 @@
             <label>
                 Date: <input type="date" id="edit-tournament-date-input" />
             </label>
+            <label style="margin-left:10px;">
+                Start Time: <input type="time" id="edit-tournament-time-input" />
+            </label>
             <br>
             <button id="submit-edit-tournament-btn">Save</button>
             <button id="cancel-edit-tournament-btn">Cancel</button>
@@ -91,6 +94,26 @@
                 <button id="submit-top-cut-btn">Create Semi-Final</button>
                 <button id="cancel-top-cut-btn">Cancel</button>
             </div>
+        </div>
+
+        <!-- Custom Confirm Modal -->
+        <div id="custom-confirm-modal" class="modal" style="display:none;">
+          <div class="modal-content">
+            <p id="custom-confirm-message"></p>
+            <div style="text-align:left;">
+              <button id="custom-confirm-yes">Okay</button>
+              <button id="custom-confirm-no" style="margin-left:8px;">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <!-- Custom Alert Modal -->
+        <div id="custom-alert-modal" class="modal" style="display:none;">
+          <div class="modal-content">
+            <p id="custom-alert-message"></p>
+            <div style="text-align:left;">
+              <button id="custom-alert-ok">Okay</button>
+            </div>
+          </div>
         </div>
     </div>
     <script src="../js/tournament.js"></script>

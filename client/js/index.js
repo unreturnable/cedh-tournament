@@ -170,16 +170,19 @@ document.getElementById('cancelTournamentBtn').onclick = function() {
 document.getElementById('submitTournamentBtn').onclick = async function() {
     const title = document.getElementById('tournamentName').value.trim();
     const date = document.getElementById('tournamentDate').value;
+    const time = document.getElementById('tournamentTime').value;
     if (!title || !date) {
         document.getElementById('createTournamentError').innerText = 'Please enter a name and date.';
         return;
     }
-
+    // Combine date and time into ISO string
+    let dateTime = date;
+    if (time) dateTime += 'T' + time;
     try {
         const res = await fetch('/api/tournament', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, username, title, date })
+            body: JSON.stringify({ userId, username, title, date: dateTime })
         });
         const data = await res.json();
         if (data.success) {

@@ -59,8 +59,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     let editingOldName = '';
+    let lastTournamentData = null;
+    let lastUpdateTime = Date.now();
 
-    async function renderTournament() {
+    // --- Update indicator logic ---
+    function updateStaleIndicator() {
+        const indicatorId = 'tournament-stale-indicator';
+        let indicator = document.getElementById(indicatorId);
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.id = indicatorId;
+            indicator.style.marginLeft = '12px';
+            indicator.style.fontSize = '0.9em';
+            indicator.style.color = 'var(--solarized-yellow)';
+            infoDiv.appendChild(indicator);
+        }
+        const now = Date.now();
+        if (now - lastUpdateTime > 60 * 1000) {
+            indicator.textContent = '⏳ Not updated in over 1 minute';
+            indicator.style.color = 'var(--solarized-red)';
+        } else {
+            indicator.textContent = '✔ Live';
+            indicator.style.color = 'var(--solarized-green)';
+        }
+    }
+
+    // --- Main render function ---
+    async function renderTournament(force = false) {
         try {
             const res = await fetch(`/api/tournament/${tournamentId}`);
             if (!res.ok) {
@@ -69,12 +94,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const tournament = await res.json();
 
+            // Only update UI if data changed or force is true
+            const tournamentString = JSON.stringify(tournament);
+            if (!force && lastTournamentData === tournamentString) {
+                updateStaleIndicator();
+                return;
+            }
+            lastTournamentData = tournamentString;
+            lastUpdateTime = Date.now();
+
             // Tournament Info
             infoDiv.innerHTML = `
                 <h1>${tournament.title}</h1>
-                <p><strong>Date:</strong> ${tournament.date ? new Date(tournament.date).toLocaleDateString() : 'Unknown'}</p>
+                <p><strong>Date:</strong> ${
+                    tournament.date
+                        ? (() => {
+                            const d = new Date(tournament.date);
+                            return isNaN(d) ? tournament.date : d.toLocaleString();
+                        })()
+                        : 'Unknown'
+                }</p>
                 <p><strong>Run by:</strong> ${tournament.username}</p>
             `;
+            updateStaleIndicator();
 
             // Show/hide edit tournament button
             if (currentUserId && tournament.user === String(currentUserId)) {
@@ -183,22 +225,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     startBtn.textContent = 'Start Tournament';
                     startBtn.className = 'start-tournament-btn';
                     startBtn.onclick = async function() {
-                        if (confirm('Are you sure you want to start the tournament? This will lock the tournament settings and you will not be able to edit the tournament name, date, or player list.')) {
-                            try {
-                                const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: currentUserId })
-                                });
-                                const data = await res.json();
-                                if (data.success) {
-                                    renderTournament();
-                                } else {
-                                    alert(data.error || 'Failed to start tournament.');
-                                }
-                            } catch (err) {
-                                alert('Failed to start tournament.');
+                        const confirmed = await showConfirmModal('Are you sure you want to start the tournament? This will lock the tournament settings and you will not be able to edit the tournament name, date, or player list.');
+                        if (!confirmed) return;
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUserId })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                renderTournament();
+                            } else {
+                                await showAlertModal(data.error || 'Failed to start tournament.');
                             }
+                        } catch (err) {
+                            await showAlertModal('Failed to start tournament.');
                         }
                     };
                     const btnWrapper = document.createElement('div');
@@ -256,22 +298,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                         cancelBtn.style.zIndex = 2; // Ensure it's above other elements
                         headerDiv.appendChild(cancelBtn); // <-- append to headerDiv, not roundDiv
                         cancelBtn.onclick = async function () {
-                            if (confirm('Are you sure you want to cancel this round? This will remove all data for this round.')) {
-                                try {
-                                    const res = await fetch(`/api/tournament/${tournamentId}/cancelRound`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ userId: currentUserId, round: round.round })
-                                    });
-                                    const data = await res.json();
-                                    if (data.success) {
-                                        renderTournament();
-                                    } else {
-                                        alert(data.error || 'Failed to cancel round.');
-                                    }
-                                } catch (err) {
-                                    alert('Failed to cancel round.');
+                            const confirmed = await showConfirmModal('Are you sure you want to cancel this round? This will remove all data for this round.');
+                            if (!confirmed) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/cancelRound`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId, round: round.round })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    await showAlertModal(data.error || 'Failed to cancel round.');
                                 }
+                            } catch (err) {
+                                await showAlertModal('Failed to cancel round.');
                             }
                         };
                     }
@@ -364,7 +406,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     editTournamentModal.style.display = 'block';
                     document.getElementById('edit-tournament-error').innerText = '';
                     document.getElementById('edit-tournament-name-input').value = tournament.title;
-                    document.getElementById('edit-tournament-date-input').value = tournament.date ? tournament.date.split('T')[0] : '';
+                    const dateOnly = tournament.date ? tournament.date.split('T')[0] : '';
+                    const timeOnly = tournament.date && tournament.date.includes('T') ? tournament.date.split('T')[1].slice(0,5) : '';
+                    document.getElementById('edit-tournament-date-input').value = dateOnly;
+                    document.getElementById('edit-tournament-time-input').value = timeOnly;
                     // Focus first input
                     document.getElementById('edit-tournament-name-input').focus();
                 };
@@ -375,15 +420,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById('submit-edit-tournament-btn').onclick = async function() {
                     const newTitle = document.getElementById('edit-tournament-name-input').value.trim();
                     const newDate = document.getElementById('edit-tournament-date-input').value;
+                    const newTime = document.getElementById('edit-tournament-time-input').value;
                     if (!newTitle || !newDate) {
                         document.getElementById('edit-tournament-error').innerText = 'Please enter a name and date.';
                         return;
                     }
+                    let dateTime = newDate;
+                    if (newTime) dateTime += 'T' + newTime;
                     try {
                         const res = await fetch(`/api/tournament/${tournamentId}/edit`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUserId, title: newTitle, date: newDate })
+                            body: JSON.stringify({ userId: currentUserId, title: newTitle, date: dateTime })
                         });
                         const data = await res.json();
                         if (data.success) {
@@ -431,9 +479,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                             renderTournament();
                         } else {
                             document.getElementById('add-player-error').innerText = data.error || 'Failed to add player.';
+                            await showAlertModal(data.error || 'Failed to add player.');
                         }
                     } catch (err) {
                         document.getElementById('add-player-error').innerText = 'Failed to add player.';
+                        await showAlertModal('Failed to add player.');
                     }
                 };
             }
@@ -448,7 +498,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 playersList.querySelectorAll('.remove-player-btn').forEach(btn => {
                     btn.onclick = async function() {
                         const playerName = decodeURIComponent(btn.getAttribute('data-player-name'));
-                        if (!confirm(`Remove player "${playerName}"?`)) return;
+                        const confirmed = await showConfirmModal(`Remove player "${playerName}"?`);
+                        if (!confirmed) return;
                         try {
                             const res = await fetch(`/api/tournament/${tournamentId}/remove-player`, {
                                 method: 'POST',
@@ -459,10 +510,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (data.success) {
                                 renderTournament();
                             } else {
-                                alert(data.error || 'Failed to remove player.');
+                                await showAlertModal(data.error || 'Failed to remove player.');
                             }
                         } catch (err) {
-                            alert('Failed to remove player.');
+                            await showAlertModal('Failed to remove player.');
                         }
                     };
                 });
@@ -517,9 +568,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                             renderTournament();
                         } else {
                             document.getElementById('edit-player-error').innerText = data.error || 'Failed to edit player.';
+                            await showAlertModal(data.error || 'Failed to edit player.');
                         }
                     } catch (err) {
                         document.getElementById('edit-player-error').innerText = 'Failed to edit player.';
+                        await showAlertModal('Failed to edit player.');
                     }
                 };
             } else {
@@ -582,10 +635,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (data.success) {
                                 renderTournament();
                             } else {
-                                alert(data.error || 'Failed to undrop player.');
+                                await showAlertModal(data.error || 'Failed to undrop player.');
                             }
                         } catch (err) {
-                            alert('Failed to undrop player.');
+                            await showAlertModal('Failed to undrop player.');
                         }
                     };
                 });
@@ -613,7 +666,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         dropBtn.textContent = 'Drop';
                         dropBtn.className = 'drop-player-btn';
                         dropBtn.onclick = async function () {
-                            if (!confirm(`Drop player "${playerName}" from the tournament?`)) return;
+                            const confirmed = await showConfirmModal(`Drop player "${playerName}" from the tournament?`);
+                            if (!confirmed) return;
                             try {
                                 const res = await fetch(`/api/tournament/${tournamentId}/drop-player`, {
                                     method: 'POST',
@@ -624,10 +678,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (data.success) {
                                     renderTournament();
                                 } else {
-                                    alert(data.error || 'Failed to drop player.');
+                                    await showAlertModal(data.error || 'Failed to drop player.');
                                 }
                             } catch (err) {
-                                alert('Failed to drop player.');
+                                await showAlertModal('Failed to drop player.');
                             }
                         };
                         dropCell.appendChild(dropBtn);
@@ -662,22 +716,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     nextRoundBtn.textContent = 'Next Round';
                     nextRoundBtn.className = 'next-round-btn';
                     nextRoundBtn.onclick = async function () {
-                        if (confirm('Start the next round?')) {
-                            try {
-                                const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: currentUserId })
-                                });
-                                const data = await res.json();
-                                if (data.success) {
-                                    renderTournament();
-                                } else {
-                                    alert(data.error || 'Failed to start next round.');
-                                }
-                            } catch (err) {
-                                alert('Failed to start next round.');
+                        const confirmed = await showConfirmModal('Start the next round?');
+                        if (!confirmed) return;
+                        try {
+                            const res = await fetch(`/api/tournament/${tournamentId}/nextRound`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUserId })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                renderTournament();
+                            } else {
+                                await showAlertModal(data.error || 'Failed to start next round.');
                             }
+                        } catch (err) {
+                            await showAlertModal('Failed to start next round.');
                         }
                     };
                     nextRoundBtnWrapper.appendChild(nextRoundBtn);
@@ -734,7 +788,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     goToFinalBtn.textContent = 'Go to final';
                     goToFinalBtn.className = 'go-to-final-btn';
                     goToFinalBtn.onclick = async function () {
-                        if (!confirm('Create the final round?')) return;
+                        const confirmed = await showConfirmModal('Create the final round?');
+                        if (!confirmed) return;
                         try {
                             const res = await fetch(`/api/tournament/${tournamentId}/final`, {
                                 method: 'POST',
@@ -745,10 +800,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (data.success) {
                                 renderTournament();
                             } else {
-                                alert(data.error || 'Failed to create final round.');
+                                await showAlertModal(data.error || 'Failed to create final round.');
                             }
                         } catch (err) {
-                            alert('Failed to create final round.');
+                            await showAlertModal('Failed to create final round.');
                         }
                     };
                     nextRoundBtnWrapper.appendChild(goToFinalBtn);
@@ -788,7 +843,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             podDiv.appendChild(undoBtn);
                         }
                         undoBtn.onclick = async function () {
-                            // Removed confirm dialog
                             try {
                                 const res = await fetch(`/api/tournament/${tournamentId}/undo-pod-result`, {
                                     method: 'POST',
@@ -803,10 +857,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (data.success) {
                                     renderTournament();
                                 } else {
-                                    alert(data.error || 'Failed to undo pod result.');
+                                    await showAlertModal(data.error || 'Failed to undo pod result.');
                                 }
                             } catch (err) {
-                                alert('Failed to undo pod result.');
+                                await showAlertModal('Failed to undo pod result.');
                             }
                         };
                     }
@@ -891,5 +945,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    renderTournament();
+    renderTournament(true);
+
+    // --- Periodic polling logic ---
+    setInterval(() => {
+        renderTournament();
+    }, 5000); // Poll every 5 seconds
+
+    // --- Stale indicator update (in case user is idle and no fetch occurs) ---
+    setInterval(() => {
+        updateStaleIndicator();
+    }, 10 * 1000);
 });
+
+// --- Custom Modal Helpers ---
+function showConfirmModal(message) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const msg = document.getElementById('custom-confirm-message');
+        const yesBtn = document.getElementById('custom-confirm-yes');
+        const noBtn = document.getElementById('custom-confirm-no');
+        msg.innerText = message;
+        modal.style.display = 'block';
+        // Move Okay and Cancel to left, Okay first
+        const btnContainer = yesBtn.parentElement;
+        btnContainer.style.textAlign = 'left';
+        if (btnContainer.firstChild !== yesBtn) {
+            btnContainer.insertBefore(yesBtn, btnContainer.firstChild);
+        }
+        if (btnContainer.children[1] !== noBtn) {
+            btnContainer.insertBefore(noBtn, btnContainer.children[1]);
+        }
+        yesBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve(true);
+        };
+        noBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve(false);
+        };
+    });
+}
+
+function showAlertModal(message) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('custom-alert-modal');
+        const msg = document.getElementById('custom-alert-message');
+        const okBtn = document.getElementById('custom-alert-ok');
+        msg.innerText = message;
+        modal.style.display = 'block';
+        // Move Okay button to left
+        okBtn.parentElement.style.textAlign = 'left';
+        okBtn.onclick = () => {
+            modal.style.display = 'none';
+            resolve();
+        };
+    });
+}
