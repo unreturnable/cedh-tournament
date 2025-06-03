@@ -4,6 +4,8 @@ const tokenData = {
 };
 let currentUserId = null;
 
+let roundsCollapsedState = {};
+
 // Collapse/expand players list
 const toggleBtn = document.getElementById('toggle-players-list');
 const playersSection = document.getElementById('players-section');
@@ -268,15 +270,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     roundDiv.className = 'round';
                     roundDiv.style.position = 'relative';
 
-                    // Collapsible logic
-                    let collapsed = false;
-                    const headerDiv = document.createElement('div');
-                    headerDiv.className = 'round-header';
-                    headerDiv.style.position = 'relative';
-
                     const toggleBtn = document.createElement('button');
                     toggleBtn.className = 'round-toggle-btn';
                     toggleBtn.innerHTML = '&#9660;';
+
+                    // Pods/results container
+                    const podsContainer = document.createElement('div');
+                    podsContainer.className = 'pods-container';
+
+                    // Collapsible logic
+                    const roundKey = round.label || `Round${round.round}`;
+                    roundsCollapsedState[roundKey] = roundsCollapsedState[roundKey] || false;
+                    podsContainer.style.display = roundsCollapsedState[roundKey] ? 'none' : 'flex';
+                    toggleBtn.innerHTML = roundsCollapsedState[roundKey] ? '&#9654;' : '&#9660;';
+
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'round-header';
+                    headerDiv.style.position = 'relative';
 
                     const title = document.createElement('h2');
                     // Use special label if present, otherwise default to "Round X"
@@ -317,10 +327,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
                         };
                     }
-
-                    // Pods/results container
-                    const podsContainer = document.createElement('div');
-                    podsContainer.className = 'pods-container';
 
                     round.pods.forEach((pod, podIdx) => {
                         const podDiv = document.createElement('div');
@@ -387,9 +393,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Toggle logic
                     toggleBtn.onclick = function () {
-                        collapsed = !collapsed;
-                        podsContainer.style.display = collapsed ? 'none' : 'flex';
-                        toggleBtn.innerHTML = collapsed ? '&#9654;' : '&#9660;';
+                        roundsCollapsedState[roundKey] = !roundsCollapsedState[roundKey];
+                        podsContainer.style.display = roundsCollapsedState[roundKey] ? 'none' : 'flex';
+                        toggleBtn.innerHTML = roundsCollapsedState[roundKey] ? '&#9654;' : '&#9660;';
                     };
 
                     roundDiv.appendChild(headerDiv);
