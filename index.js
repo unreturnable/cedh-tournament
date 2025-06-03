@@ -307,7 +307,7 @@ function applyRoundScoring(tournament, round) {
     const pointsChanges = [];
 
     round.pods.forEach(pod => {
-        if (pod.result === 'bye' || pod.result === 'auto-final') {
+        if (pod.result === 'bye') {
             // Bye: +5% points
             (pod.players || []).forEach(name => {
                 const p = playerMap[name];
@@ -317,6 +317,16 @@ function applyRoundScoring(tournament, round) {
                 p.points = (p.points || 1000) + change;
                 pod.result = 'bye';
             });
+        } else if (pod.result === 'auto-final') {
+            // Add a flat 300 points to auto-final players to ensure they remain above other players
+            (pod.players || []).forEach(name => {
+                const p = playerMap[name];
+                if (!p) return;
+                const change = 300;
+                pointsChanges.push({ name, change });
+                p.points = (p.points || 1000) + change;
+            });
+
         } else if (pod.result === 'win' && pod.winner) {
             // Winner steals 10% of each other player's points
             let totalStolen = 0;
@@ -612,6 +622,17 @@ app.post('/api/tournament/:id/topcut', async (req, res) => {
         // Prevent top cut if already done
         if (tournament.topCut) {
             return res.status(400).json({ error: 'Top cut already performed' });
+        }
+
+        // --- Prevent top cut if not all pod results are reported ---
+        if (tournament.rounds.length > 0) {
+            const lastRound = tournament.rounds[tournament.rounds.length - 1];
+            const unreported = (lastRound.pods || []).some(
+                pod => pod.label !== 'Bye' && !pod.result
+            );
+            if (unreported) {
+                return res.status(400).json({ error: 'All pod results must be reported before performing top cut.' });
+            }
         }
 
         // Apply scoring for previous round if needed

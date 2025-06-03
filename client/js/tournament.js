@@ -690,6 +690,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     topCutBtn.onclick = function () {
                         document.getElementById('top-cut-modal').style.display = 'block';
                         document.getElementById('top-cut-error').innerText = '';
+                        // Focus the auto-final-count input when modal opens
+                        setTimeout(() => {
+                            document.getElementById('auto-final-count').focus();
+                        }, 0);
                     };
                     nextRoundBtnWrapper.appendChild(topCutBtn);
 
