@@ -78,10 +78,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const now = Date.now();
         if (now - lastUpdateTime > 60 * 1000) {
-            indicator.textContent = '⏳ Not updated in over 1 minute';
+            indicator.textContent = '⏳ Disconnected';
             indicator.style.color = 'var(--solarized-red)';
         } else {
-            indicator.textContent = '✔ Live';
+            indicator.textContent = '✔ Connected';
             indicator.style.color = 'var(--solarized-green)';
         }
     }
@@ -607,8 +607,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 let undropBtn = '';
                                 if (
                                     currentUserId &&
-                                    tournament.user === String(currentUserId) &&
-                                    (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0 || !tournament.ended)
+                                    tournament.user === String(currentUserId)
                                 ) {
                                     undropBtn = `<button class="undrop-player-btn" data-player-name="${encodeURIComponent(player.name)}">Undrop</button>`;
                                 }
