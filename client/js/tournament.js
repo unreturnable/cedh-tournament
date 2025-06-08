@@ -300,7 +300,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (
                         currentUserId &&
                         tournament.user === String(currentUserId) &&
-                        roundIdx === tournament.rounds.length - 1
+                        roundIdx === tournament.rounds.length - 1 &&
+                        !tournament.locked // <-- Only show if not locked
                     ) {
                         const cancelBtn = document.createElement('button');
                         cancelBtn.className = 'cancel-round-btn';
@@ -364,7 +365,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                             !pod.result &&
                             currentUserId &&
                             tournament.user === String(currentUserId) &&
-                            roundIdx === tournament.rounds.length - 1 // Only for current round
+                            roundIdx === tournament.rounds.length - 1 && // Only for current round
+                            !tournament.locked // <-- Only show if not locked
                         ) {
                             resultBtns = `
                                 <div class="pod-result-btns" style="margin-bottom:8px;">
@@ -655,7 +657,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentUserId &&
                 tournament.user === String(currentUserId) &&
                 Array.isArray(tournament.rounds) &&
-                tournament.rounds.length > 0
+                tournament.rounds.length > 0 &&
+                !tournament.locked // <-- Only show if not locked
             ) {
                 playersList.querySelectorAll('.player-table tr').forEach(row => {
                     const nameCell = row.querySelector('.player-name');
@@ -816,12 +819,94 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // Attach result reporting logic (only for current round and owner)
+            // --- LOCK/UNLOCK TOURNAMENT BUTTON ---
+            // Only show if final round exists and user is owner
             if (
                 currentUserId &&
                 tournament.user === String(currentUserId) &&
                 Array.isArray(tournament.rounds) &&
                 tournament.rounds.length > 0
+            ) {
+                const finalRound = tournament.rounds[tournament.rounds.length - 1];
+                if (finalRound && finalRound.label === 'Final') {
+                    // Remove existing lock/unlock button if present
+                    let lockBtnDiv = document.getElementById('lock-tournament-btn-div');
+                    if (lockBtnDiv) lockBtnDiv.remove();
+
+                    lockBtnDiv = document.createElement('div');
+                    lockBtnDiv.id = 'lock-tournament-btn-div';
+                    lockBtnDiv.style.display = 'flex';
+                    lockBtnDiv.style.justifyContent = 'center';
+                    lockBtnDiv.style.margin = '32px 0 16px 0';
+
+                    let btn = document.createElement('button');
+                    btn.style.fontSize = '1.1em';
+                    btn.style.padding = '10px 24px';
+
+                    if (tournament.locked) {
+                        btn.textContent = 'Unlock Tournament';
+                        btn.className = 'unlock-tournament-btn';
+                        btn.onclick = async function () {
+                            const confirmed = await showConfirmModal('Unlock the tournament? This will allow editing again.');
+                            if (!confirmed) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/unlock`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    await showAlertModal(data.error || 'Failed to unlock tournament.');
+                                }
+                            } catch (err) {
+                                await showAlertModal('Failed to unlock tournament.');
+                            }
+                        };
+                        lockBtnDiv.appendChild(btn);
+                    } else {
+                        // Only allow lock if all final pod results are reported
+                        const allReported = (finalRound.pods || []).every(pod => pod.result);
+                        btn.textContent = 'Lock Tournament';
+                        btn.className = 'lock-tournament-btn';
+                        btn.disabled = !allReported;
+                        btn.title = allReported ? '' : 'All final results must be reported before locking.';
+                        btn.onclick = async function () {
+                            if (!allReported) return;
+                            const confirmed = await showConfirmModal('Lock the tournament? This will finalize all results and scoring.');
+                            if (!confirmed) return;
+                            try {
+                                const res = await fetch(`/api/tournament/${tournamentId}/lock`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUserId })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                    renderTournament();
+                                } else {
+                                    await showAlertModal(data.error || 'Failed to lock tournament.');
+                                }
+                            } catch (err) {
+                                await showAlertModal('Failed to lock tournament.');
+                            }
+                        };
+                        lockBtnDiv.appendChild(btn);
+                    }
+                    // Add to bottom of roundsContainer
+                    roundsContainer.appendChild(lockBtnDiv);
+                }
+            }
+
+            // Attach result reporting logic (only for current round and owner)
+            if (
+                currentUserId &&
+                tournament.user === String(currentUserId) &&
+                Array.isArray(tournament.rounds) &&
+                tournament.rounds.length > 0 &&
+                !tournament.locked // <-- Only attach if not locked
             ) {
                 const currentRoundIdx = tournament.rounds.length - 1;
                 const currentRound = tournament.rounds[currentRoundIdx];
@@ -837,7 +922,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (
                         pod.result && 
                         pod.result !== 'bye' && 
-                        pod.label !== 'Automatically qualified for final' // <-- Add this condition
+                        pod.label !== 'Automatically qualified for final'
                     ) {
                         let undoBtn = podDiv.querySelector('.undo-pod-result-btn');
                         if (!undoBtn) {
@@ -920,7 +1005,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const drawBtn = podDiv.querySelector('.report-draw-btn');
                     if (drawBtn) {
                         drawBtn.onclick = async function () {
-                            // Removed confirm dialog
                             try {
                                 const res = await fetch(`/api/tournament/${tournamentId}/report-pod-result`, {
                                     method: 'POST',

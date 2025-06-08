@@ -306,63 +306,86 @@ function applyRoundScoring(tournament, round) {
     }
     const pointsChanges = [];
 
-    round.pods.forEach(pod => {
-        if (pod.result === 'bye') {
-            // Bye: +5% points
-            (pod.players || []).forEach(name => {
+    if (round.label === 'Semi-Final') {
+         round.pods.forEach(pod => {
+            if (pod.result === 'auto-final') {
+                // Add a flat 1000 points to auto-final players to ensure they remain above other players
+                (pod.players || []).forEach(name => {
+                    const p = playerMap[name];
+                    if (!p) return;
+                    const change = 1000;
+                    pointsChanges.push({ name, change });
+                    p.points = (p.points || 1000) + change;
+                });
+            } else if (pod.result === 'win' && pod.winner) {
+                const name = pod.winner;
                 const p = playerMap[name];
                 if (!p) return;
-                const change = Math.round((p.points || 1000) * 0.05);
-                pointsChanges.push({ name, change });
-                p.points = (p.points || 1000) + change;
-                pod.result = 'bye';
-            });
-        } else if (pod.result === 'auto-final') {
-            // Add a flat 300 points to auto-final players to ensure they remain above other players
-            (pod.players || []).forEach(name => {
-                const p = playerMap[name];
-                if (!p) return;
-                const change = 300;
-                pointsChanges.push({ name, change });
-                p.points = (p.points || 1000) + change;
-            });
-
-        } else if (pod.result === 'win' && pod.winner) {
-            // Winner steals 10% of each other player's points
-            let totalStolen = 0;
-            (pod.players || []).forEach(name => {
-                if (name === pod.winner) return;
-                const p = playerMap[name];
-                if (!p) return;
-                const loss = Math.round((p.points || 1000) * 0.10);
-                pointsChanges.push({ name, change: -loss });
-                p.points = (p.points || 1000) - loss;
-                totalStolen += loss;
-            });
-            const winnerObj = playerMap[pod.winner];
-            if (winnerObj) {
-                pointsChanges.push({ name: pod.winner, change: totalStolen });
-                winnerObj.points = (winnerObj.points || 1000) + totalStolen;
+                    const change = 1000;
+                    pointsChanges.push({ name, change });
+                    p.points = (p.points || 1000) + change;
             }
-        } else if (pod.result === 'draw') {
-            // All lose 5%
-            (pod.players || []).forEach(name => {
+        });
+    } else if (round.label === 'Final') {
+         round.pods.forEach(pod => {
+            if (pod.result === 'win' && pod.winner) {
+                const name = pod.winner;
                 const p = playerMap[name];
                 if (!p) return;
-                const loss = Math.round((p.points || 1000) * 0.05);
-                pointsChanges.push({ name, change: -loss });
+                    const change = 2000;
+                    pointsChanges.push({ name, change });
+                    p.points = (p.points || 1000) + change;
+            }
+        });
+    } else {
+        round.pods.forEach(pod => {
+            if (pod.result === 'bye') {
+                // Bye: +5% points
+                (pod.players || []).forEach(name => {
+                    const p = playerMap[name];
+                    if (!p) return;
+                    const change = Math.round((p.points || 1000) * 0.05);
+                    pointsChanges.push({ name, change });
+                    p.points = (p.points || 1000) + change;
+                    pod.result = 'bye';
+                });
+            } else if (pod.result === 'win' && pod.winner) {
+                // Winner steals 10% of each other player's points
+                let totalStolen = 0;
+                (pod.players || []).forEach(name => {
+                    if (name === pod.winner) return;
+                    const p = playerMap[name];
+                    if (!p) return;
+                    const loss = Math.round((p.points || 1000) * 0.10);
+                    pointsChanges.push({ name, change: -loss });
+                    p.points = (p.points || 1000) - loss;
+                    totalStolen += loss;
+                });
+                const winnerObj = playerMap[pod.winner];
+                if (winnerObj) {
+                    pointsChanges.push({ name: pod.winner, change: totalStolen });
+                    winnerObj.points = (winnerObj.points || 1000) + totalStolen;
+                }
+            } else if (pod.result === 'draw') {
+                // All lose 5%
+                (pod.players || []).forEach(name => {
+                    const p = playerMap[name];
+                    if (!p) return;
+                    const loss = Math.round((p.points || 1000) * 0.05);
+                    pointsChanges.push({ name, change: -loss });
+                    p.points = (p.points || 1000) - loss;
+                });
+            }
+        });
+
+        // Deduct 10% from each dropped player for this round
+        if (Array.isArray(tournament.droppedPlayers)) {
+            tournament.droppedPlayers.forEach(p => {
+                const loss = Math.round((p.points || 1000) * 0.1);
+                pointsChanges.push({ name: p.name, change: -loss, dropped: true });
                 p.points = (p.points || 1000) - loss;
             });
         }
-    });
-
-    // Deduct 10% from each dropped player for this round
-    if (Array.isArray(tournament.droppedPlayers)) {
-        tournament.droppedPlayers.forEach(p => {
-            const loss = Math.round((p.points || 1000) * 0.1);
-            pointsChanges.push({ name: p.name, change: -loss, dropped: true });
-            p.points = (p.points || 1000) - loss;
-        });
     }
 
     return pointsChanges;
@@ -435,6 +458,9 @@ app.post('/api/tournament/:id/cancelRound', async (req, res) => {
     }
     try {
         const tournament = await db.getData(`/${id}`);
+        if (tournament.locked) {
+            return res.status(400).json({ error: 'Tournament is locked and cannot be modified.' });
+        }
         if (tournament.user !== String(userId)) {
             return res.status(403).json({ error: 'Not authorized to cancel a round for this tournament' });
         }
@@ -481,6 +507,9 @@ app.post('/api/tournament/:id/drop-player', async (req, res) => {
     }
     try {
         const tournament = await db.getData(`/${id}`);
+        if (tournament.locked) {
+            return res.status(400).json({ error: 'Tournament is locked and players cannot be dropped.' });
+        }
         if (tournament.user !== String(userId)) {
             return res.status(403).json({ error: 'Not authorized to drop players from this tournament' });
         }
@@ -547,6 +576,9 @@ app.post('/api/tournament/:id/report-pod-result', async (req, res) => {
     }
     try {
         const tournament = await db.getData(`/${id}`);
+        if (tournament.locked) {
+            return res.status(400).json({ error: 'Tournament is locked. Results cannot be submitted.' });
+        }
         if (tournament.user !== String(userId)) {
             return res.status(403).json({ error: 'Not authorized' });
         }
@@ -583,6 +615,9 @@ app.post('/api/tournament/:id/undo-pod-result', async (req, res) => {
     }
     try {
         const tournament = await db.getData(`/${id}`);
+        if (tournament.locked) {
+            return res.status(400).json({ error: 'Tournament is locked. Results cannot be undone.' });
+        }
         if (tournament.user !== String(userId)) {
             return res.status(403).json({ error: 'Not authorized' });
         }
@@ -780,6 +815,90 @@ app.post('/api/tournament/:id/final', async (req, res) => {
         await db.push(`/${id}`, tournament, true);
 
         return res.json({ success: true, round: roundData, rounds: tournament.rounds });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Lock the tournament (only if final round result is reported)
+app.post('/api/tournament/:id/lock', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        if (!Array.isArray(tournament.rounds) || tournament.rounds.length === 0) {
+            return res.status(400).json({ error: 'No rounds found' });
+        }
+        const finalRound = tournament.rounds[tournament.rounds.length - 1];
+        if (!finalRound || finalRound.label !== 'Final') {
+            return res.status(400).json({ error: 'Final round not found' });
+        }
+        // Check if final round result is reported
+        const allReported = (finalRound.pods || []).every(pod => pod.result);
+        if (!allReported) {
+            return res.status(400).json({ error: 'Final round result not reported' });
+        }
+        // Score the final round if not already scored
+        if (!finalRound.pointsApplied) {
+            const pointsChanges = applyRoundScoring(tournament, finalRound);
+            finalRound.pointsChanges = pointsChanges;
+            finalRound.pointsApplied = true;
+        }
+        tournament.locked = true;
+        await db.push(`/${id}`, tournament, true);
+        return res.json({ success: true, tournament });
+    } catch (error) {
+        return res.status(404).json({ error: 'Tournament not found' });
+    }
+});
+
+// Unlock the tournament (owner only)
+app.post('/api/tournament/:id/unlock', async (req, res) => {
+    const { id } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    try {
+        const tournament = await db.getData(`/${id}`);
+        if (tournament.user !== String(userId)) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        // Undo points for the final round if pointsApplied
+        if (
+            Array.isArray(tournament.rounds) &&
+            tournament.rounds.length > 0
+        ) {
+            console.log(tournament.rounds);
+            const finalRound = tournament.rounds[tournament.rounds.length - 1];
+            console.log(finalRound);
+            if (
+                finalRound &&
+                finalRound.label === 'Final' &&
+                finalRound.pointsApplied &&
+                Array.isArray(finalRound.pointsChanges)
+            ) {
+                // Map player names to player objects
+                const playerMap = {};
+                if (Array.isArray(tournament.players)) {
+                    tournament.players.forEach(p => { playerMap[p.name] = p; });
+                }
+                if (Array.isArray(tournament.droppedPlayers)) {
+                    tournament.droppedPlayers.forEach(p => { playerMap[p.name] = p; });
+                }
+                finalRound.pointsChanges.forEach(change => {
+                    const p = playerMap[change.name];
+                    if (p) p.points = (p.points || 1000) - change.change;
+                });
+                delete finalRound.pointsApplied;
+                finalRound.pointsChanges = [];
+            }
+        }
+        tournament.locked = false;
+        await db.push(`/${id}`, tournament, true);
+        return res.json({ success: true, tournament });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
     }
