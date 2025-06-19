@@ -1037,14 +1037,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTournament(true);
 
     // --- Periodic polling logic ---
-    setInterval(() => {
-        renderTournament();
-    }, 5000); // Poll every 5 seconds
+    let pollingIntervalId = null;
+    let staleIntervalId = null;
 
-    // --- Stale indicator update (in case user is idle and no fetch occurs) ---
-    setInterval(() => {
-        updateStaleIndicator();
-    }, 10 * 1000);
+    function startIntervals() {
+        // Clear any existing intervals first
+        if (pollingIntervalId) clearInterval(pollingIntervalId);
+        if (staleIntervalId) clearInterval(staleIntervalId);
+
+        pollingIntervalId = setInterval(() => {
+            renderTournament();
+        }, 5000); // Poll every 5 seconds
+
+        staleIntervalId = setInterval(() => {
+            updateStaleIndicator();
+        }, 10 * 1000);
+    }
+
+    startIntervals();
+
+    // --- Restart intervals when tab regains focus ---
+    window.addEventListener('focus', () => {
+        startIntervals();
+    });
 });
 
 // --- Custom Modal Helpers ---
