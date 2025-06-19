@@ -116,6 +116,7 @@ app.post('/api/tournament', async (req, res) => {
         title,
         date,
         players: [],
+        playersForPods: [], // <-- Add this line
         rounds: []
     };
     try {
@@ -159,7 +160,9 @@ app.post('/api/tournament/:id/add-player', async (req, res) => {
         }
         if (!Array.isArray(tournament.players)) tournament.players = [];
         tournament.players.push({ name: playerName, deck: deckLink || '' });
+        tournament.playersForPods.push(playerName); // <-- Add this line
         await db.push(`/${id}/players`, tournament.players, true);
+        await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
         return res.json({ success: true, players: tournament.players });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -181,10 +184,12 @@ app.post('/api/tournament/:id/remove-player', async (req, res) => {
         if (!Array.isArray(tournament.players)) tournament.players = [];
         const initialLength = tournament.players.length;
         tournament.players = tournament.players.filter(p => p.name !== playerName);
+        tournament.playersForPods = tournament.playersForPods.filter(n => n !== playerName); // <-- Add this line
         if (tournament.players.length === initialLength) {
             return res.status(404).json({ error: 'Player not found' });
         }
         await db.push(`/${id}/players`, tournament.players, true);
+        await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
         return res.json({ success: true, players: tournament.players });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -238,50 +243,75 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
     }
 });
 
-/**
- * Split an array of player names into pods:
- * - Maximise the number of 4 pods
- * - If the remaining players after all 4 pods are created totals 3, put them in a 3 pod
- * - Any other remaining players are put into a two pod or left on their own
- * @param {string[]} playerNames
- * @returns {string[][]} Array of pods (arrays of player names)
- */
-function splitPods(playerNames) {
-    const shuffled = [...playerNames].sort(() => Math.random() - 0.5);
+function splitPods(roundNumber, playerNames) {
     const pods = [];
     let i = 0;
-    const n = shuffled.length;
+    const n = playerNames.length;
     let podNumber = 1;
+    let selected = [];
 
     let numFours = Math.floor(n / 4);
 
+    let index = 0;
+
     for (let j = 0; j < numFours; j++) {
+        let podPlayers = [];
+        
+        while (podPlayers.length < 4) {
+            if (!selected.includes(playerNames[index])) {
+                podPlayers.push(playerNames[index]);
+                selected.push(playerNames[index]);
+                index += roundNumber;
+            } else {
+                index++;
+            }
+
+            if (index >= playerNames.length) {
+                index = index - playerNames.length;
+            }
+        }
+
         pods.push({
             label: `Pod ${podNumber++}`,
-            players: shuffled.slice(i, i + 4)
+            players: podPlayers
         });
         i += 4;
     }
 
     const remaining = n - i;
     if (remaining === 3) {
+        let podPlayers = [];
+        while (podPlayers.length < 3) {
+            if (!selected.includes(playerNames[index])) {
+                podPlayers.push(playerNames[index]);
+                selected.push(playerNames[index]);
+                index += roundNumber;
+            } else {
+                index++;
+            }
+
+            if (index > playerNames.length) {
+                index = index - playerNames.length;
+            }
+        }
+
         pods.push({
             label: `Pod ${podNumber++}`,
-            players: shuffled.slice(i, i + 3)
+            players: podPlayers
         });
         i += 3;
-    } else if (remaining === 2) {
+    } else if (remaining === 2) { // TODO: Bye logic is currently broken and needs fixing
         pods.push({
             label: 'Bye',
             result: 'bye',
-            players: shuffled.slice(i, i + 2)
+            players: playerNames.slice(i, i + 2)
         });
         i += 2;
     } else if (remaining === 1) {
         pods.push({
             label: 'Bye',
             result: 'bye',
-            players: [shuffled[i]]
+            players: [playerNames[i]]
         });
         i += 1;
     }
@@ -289,11 +319,26 @@ function splitPods(playerNames) {
     return pods;
 }
 
-/**
- * Apply scoring for a round and update player points.
- * Returns an array of pointsChanges for this round.
- * Handles both active and dropped players.
- */
+function splitSemiFinalPods(players, podSize = 4) {
+    // Sort players by points descending, then by name for deterministic order
+    const sorted = [...players].sort((a, b) => {
+        const pa = (typeof a.points === 'number' ? a.points : 1000);
+        const pb = (typeof b.points === 'number' ? b.points : 1000);
+        if (pb !== pa) return pb - pa;
+        return a.name.localeCompare(b.name);
+    });
+
+    const pods = [];
+    let podNumber = 1;
+    for (let i = 0; i < sorted.length; i += podSize) {
+        pods.push({
+            label: `Pod ${podNumber++}`,
+            players: sorted.slice(i, i + podSize).map(p => p.name)
+        });
+    }
+    return pods;
+}
+
 function applyRoundScoring(tournament, round) {
     if (!round || !Array.isArray(round.pods)) return [];
     // Map player names to player objects
@@ -391,6 +436,27 @@ function applyRoundScoring(tournament, round) {
     return pointsChanges;
 }
 
+// Simple seeded random generator (mulberry32)
+function mulberry32(seed) {
+    return function() {
+        let t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
+// Seeded shuffle (Fisher-Yates)
+function seededShuffle(array, seed) {
+    const rand = mulberry32(seed);
+    const arr = array.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
 // Create the next round for a tournament (only if user owns it)
 app.post('/api/tournament/:id/nextRound', async (req, res) => {
     const { id } = req.params;
@@ -427,8 +493,31 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
         }
 
         // --- Create new round ---
-        const pods = splitPods(tournament.players.map(p => typeof p === 'object' ? p.name : p));
+        let playerNames = Array.isArray(tournament.playersForPods)
+            ? tournament.playersForPods.slice()
+            : tournament.players.map(p => typeof p === 'object' ? p.name : p);
+
+        // Use seeded shuffle for the first round only
+        if (tournament.rounds.length === 0) {
+            // Use canonical FNV-1a hash for deterministic seed
+            let hash = 2166136261;
+            for (let i = 0; i < tournament.id.length; i++) {
+                hash ^= tournament.id.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            let seed = hash >>> 0; // Ensure unsigned 32-bit integer
+
+            // Sort playerNames for deterministic input
+            playerNames = playerNames.slice().sort();
+
+            playerNames = seededShuffle(playerNames, seed);
+
+            tournament.playersForPods = playerNames.slice(); // Save the shuffled order
+            await db.push(`/${id}/playersForPods`, tournament.playersForPods, true);
+        }
+
         const roundNumber = tournament.rounds.length + 1;
+        const pods = splitPods(roundNumber, playerNames);
         const roundData = {
             round: roundNumber,
             pods: pods.map(pod => ({
@@ -526,9 +615,11 @@ app.post('/api/tournament/:id/drop-player', async (req, res) => {
         // Move player to droppedPlayers
         const [player] = tournament.players.splice(idx, 1);
         tournament.droppedPlayers.push(player);
+        tournament.playersForPods = tournament.playersForPods.filter(n => n !== playerName); // <-- Add this line
 
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
+        await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {
@@ -557,9 +648,11 @@ app.post('/api/tournament/:id/undrop-player', async (req, res) => {
         // Move player back to players
         const [player] = tournament.droppedPlayers.splice(idx, 1);
         tournament.players.push(player);
+        tournament.playersForPods.push(playerName); // <-- Add this line
 
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
+        await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {
@@ -686,7 +779,8 @@ app.post('/api/tournament/:id/topcut', async (req, res) => {
         autoFinalPlayers.forEach(p => p.autoFinal = true);
 
         // Create semi-final pods
-        const pods = splitPods(semiFinalPlayers.map(p => p.name));
+        // const pods = splitPods(1, semiFinalPlayers.map(p => p.name));
+        const pods = splitSemiFinalPods(semiFinalPlayers, 4);
         // Add a special pod for auto-final players
         if (autoFinalPlayers.length > 0) {
             pods.push({
