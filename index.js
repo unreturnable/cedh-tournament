@@ -116,8 +116,9 @@ app.post('/api/tournament', async (req, res) => {
         title,
         date,
         players: [],
-        playersForPods: [], // <-- Add this line
-        rounds: []
+        playersForPods: [],
+        rounds: [],
+        hasHadBye: [],
     };
     try {
         await db.push(`/${id}`, tournament, true);
@@ -243,80 +244,98 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
     }
 });
 
-function splitPods(roundNumber, playerNames) {
+function splitPods(roundNumber, playerNames, hasHadBye) {
     const pods = [];
     let i = 0;
     const n = playerNames.length;
     let podNumber = 1;
-    let selected = [];
 
     let numFours = Math.floor(n / 4);
 
-    let index = 0;
-
     for (let j = 0; j < numFours; j++) {
-        let podPlayers = [];
-        
-        while (podPlayers.length < 4) {
-            if (!selected.includes(playerNames[index])) {
-                podPlayers.push(playerNames[index]);
-                selected.push(playerNames[index]);
-                index += roundNumber;
-            } else {
-                index++;
-            }
-
-            if (index >= playerNames.length) {
-                index = index - playerNames.length;
-            }
-        }
-
         pods.push({
             label: `Pod ${podNumber++}`,
-            players: podPlayers
+            players: [],
+            numberOfPlayers: 4
         });
         i += 4;
     }
 
     const remaining = n - i;
     if (remaining === 3) {
-        let podPlayers = [];
-        while (podPlayers.length < 3) {
-            if (!selected.includes(playerNames[index])) {
-                podPlayers.push(playerNames[index]);
-                selected.push(playerNames[index]);
-                index += roundNumber;
-            } else {
-                index++;
-            }
-
-            if (index > playerNames.length) {
-                index = index - playerNames.length;
-            }
-        }
-
         pods.push({
             label: `Pod ${podNumber++}`,
-            players: podPlayers
+            players: [],
+            numberOfPlayers: 3
         });
         i += 3;
-    } else if (remaining === 2) { // TODO: Bye logic is currently broken and needs fixing
-        pods.push({
+    } else if (remaining === 2) {
+        pods.unshift({
             label: 'Bye',
             result: 'bye',
-            players: playerNames.slice(i, i + 2)
+            players: [],
+            numberOfPlayers: 2
         });
         i += 2;
     } else if (remaining === 1) {
-        pods.push({
+        pods.unshift({
             label: 'Bye',
             result: 'bye',
-            players: [playerNames[i]]
+            players: [],
+            numberOfPlayers: 1
         });
         i += 1;
     }
 
-    return pods;
+    let selected = [];
+    let index = 0;
+    
+    // Reset if all players have had a bye
+    hasHadBye = hasHadBye.length === playerNames.length ? [] : hasHadBye;
+
+    pods.forEach(pod => {
+        let podPlayers = [];
+        
+        if (pod.label === 'Bye') {
+
+            while (podPlayers.length < pod.numberOfPlayers) {
+
+                if (!selected.includes(playerNames[index]) && !hasHadBye.includes(playerNames[index])) {
+                    podPlayers.push(playerNames[index]);
+                    hasHadBye.push(playerNames[index]);
+                    selected.push(playerNames[index]);
+                    index += roundNumber;
+                } else {
+                    index++;
+                }
+
+                if (index >= playerNames.length) {
+                    index = index - playerNames.length;
+                }
+            }
+
+        } else {
+
+            while (podPlayers.length < pod.numberOfPlayers) {
+                if (!selected.includes(playerNames[index])) {
+                    podPlayers.push(playerNames[index]);
+                    selected.push(playerNames[index]);
+                    index += roundNumber;
+                } else {
+                    index++;
+                }
+
+                if (index >= playerNames.length) {
+                    index = index - playerNames.length;
+                }
+            }
+
+        }
+
+        pod.players = podPlayers;
+    });
+
+    return [pods, hasHadBye];
 }
 
 function splitSemiFinalPods(players, podSize = 4) {
@@ -493,10 +512,9 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
         }
 
         // --- Create new round ---
-        let playerNames = Array.isArray(tournament.playersForPods)
-            ? tournament.playersForPods.slice()
-            : tournament.players.map(p => typeof p === 'object' ? p.name : p);
+        let playerNames = tournament.players.map(p => typeof p === 'object' ? p.name : p);
 
+        // TODO: Improve shuffle logic to handle edge cases of randomness better. Ideally needs more testing
         // Use seeded shuffle for the first round only
         if (tournament.rounds.length === 0) {
             // Use canonical FNV-1a hash for deterministic seed
@@ -509,15 +527,26 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
 
             // Sort playerNames for deterministic input
             playerNames = playerNames.slice().sort();
-
             playerNames = seededShuffle(playerNames, seed);
+
+            // Ensure first element is not the sorted first
+            const sortedFirst = playerNames.slice().sort()[0];
+            if (playerNames[0] === sortedFirst && playerNames.length > 1) {
+                // Use seeded RNG to pick a swap index (not 0)
+                const rand = mulberry32(seed + 1); // Use a different seed for swap
+                const swapIdx = 1 + Math.floor(rand() * (playerNames.length - 1));
+                [playerNames[0], playerNames[swapIdx]] = [playerNames[swapIdx], playerNames[0]];
+            }
 
             tournament.playersForPods = playerNames.slice(); // Save the shuffled order
             await db.push(`/${id}/playersForPods`, tournament.playersForPods, true);
         }
 
         const roundNumber = tournament.rounds.length + 1;
-        const pods = splitPods(roundNumber, playerNames);
+        const result = splitPods(roundNumber, playerNames, tournament.hasHadBye || []);
+        const pods = result[0];
+        tournament.hasHadBye = result[1] || [];
+
         const roundData = {
             round: roundNumber,
             pods: pods.map(pod => ({
@@ -579,6 +608,20 @@ app.post('/api/tournament/:id/cancelRound', async (req, res) => {
         if (lastRound.isTopCut && tournament.topCut) {
             delete tournament.topCut;
         }
+
+        // Remove bye players from hasHadBye for this round
+        if (Array.isArray(lastRound.pods)) {
+            lastRound.pods.forEach(pod => {
+                if (pod.result === 'bye' && Array.isArray(pod.players)) {
+                    pod.players.forEach(name => {
+                        if (Array.isArray(tournament.hasHadBye)) {
+                            tournament.hasHadBye = tournament.hasHadBye.filter(n => n !== name);
+                        }
+                    });
+                }
+            });
+        }
+
         tournament.rounds.pop();
         await db.push(`/${id}`, tournament, true);
         return res.json({ success: true, rounds: tournament.rounds });
@@ -862,27 +905,35 @@ app.post('/api/tournament/:id/final', async (req, res) => {
 
         // Collect semi-final winners or highest points if no winner
         let semiFinalWinners = [];
+        let alreadyFinalists = new Set(autoFinalPlayers);
+
         (lastRound.pods || []).forEach(pod => {
             if (pod.label === 'Automatically qualified for final') return;
             if (pod.result === 'win' && pod.winner) {
                 semiFinalWinners.push(pod.winner);
-            } else if (Array.isArray(pod.players) && pod.players.length > 0) {
-                // Pick player with highest points in this pod
-                let best = pod.players[0];
-                let bestPoints = (playerMap[best] && playerMap[best].points !== undefined) ? playerMap[best].points : 1000;
-                pod.players.forEach(name => {
-                    const pts = (playerMap[name] && playerMap[name].points !== undefined) ? playerMap[name].points : 1000;
-                    if (pts > bestPoints) {
-                        best = name;
-                        bestPoints = pts;
+                alreadyFinalists.add(pod.winner);
+            } else {
+                // Pick highest points player not already in finalists
+                let best = null;
+                let bestPoints = -Infinity;
+                for (const name in playerMap) {
+                    if (!alreadyFinalists.has(name)) {
+                        const pts = (playerMap[name] && playerMap[name].points !== undefined) ? playerMap[name].points : 1000;
+                        if (pts > bestPoints) {
+                            best = name;
+                            bestPoints = pts;
+                        }
                     }
-                });
-                semiFinalWinners.push(best);
+                }
+                if (best) {
+                    semiFinalWinners.push(best);
+                    alreadyFinalists.add(best);
+                }
             }
         });
 
         // Finalists = autoFinalPlayers + semiFinalWinners (deduplicate)
-        const finalists = Array.from(new Set([...autoFinalPlayers, ...semiFinalWinners]));
+        const finalists = Array.from(alreadyFinalists);
 
         if (finalists.length < 2) {
             return res.status(400).json({ error: 'Not enough finalists to create final round.' });
@@ -965,9 +1016,8 @@ app.post('/api/tournament/:id/unlock', async (req, res) => {
             Array.isArray(tournament.rounds) &&
             tournament.rounds.length > 0
         ) {
-            console.log(tournament.rounds);
             const finalRound = tournament.rounds[tournament.rounds.length - 1];
-            console.log(finalRound);
+
             if (
                 finalRound &&
                 finalRound.label === 'Final' &&
