@@ -94,9 +94,39 @@ app.post('/api/tournaments', async (req, res) => {
 // Get a tournament by id
 app.get('/api/tournament/:id', async (req, res) => {
     const { id } = req.params;
+    // Try to get userId from query or header (for GET, can't use body)
+    const userId = req.query.userId || req.headers['x-user-id'];
     try {
         const tournament = await db.getData(`/${id}`);
-        return res.json(tournament);
+        const isOwner = userId && String(tournament.user) === String(userId);
+
+        // Clone tournament to avoid mutating DB
+        const filtered = JSON.parse(JSON.stringify(tournament));
+
+        if (!isOwner) {
+            if (filtered.hideScores) {
+                // Remove points from players and droppedPlayers
+                if (Array.isArray(filtered.players)) {
+                    filtered.players.forEach(p => { delete p.points; });
+                }
+                if (Array.isArray(filtered.droppedPlayers)) {
+                    filtered.droppedPlayers.forEach(p => { delete p.points; });
+                }
+                // Remove pointsChanges from rounds
+                if (Array.isArray(filtered.rounds)) {
+                    filtered.rounds.forEach(r => { delete r.pointsChanges; });
+                }
+            }
+            if (filtered.hideDecklists) {
+                if (Array.isArray(filtered.players)) {
+                    filtered.players.forEach(p => { delete p.deck; });
+                }
+                if (Array.isArray(filtered.droppedPlayers)) {
+                    filtered.droppedPlayers.forEach(p => { delete p.deck; });
+                }
+            }
+        }
+        return res.json(filtered);
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
     }
@@ -104,7 +134,7 @@ app.get('/api/tournament/:id', async (req, res) => {
 
 // Create a new tournament
 app.post('/api/tournament', async (req, res) => {
-    const { userId, username, title, date } = req.body;
+    const { userId, username, title, date, hideScores = false, hideDecklists = false } = req.body;
     if (!userId || !title || !date) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -119,6 +149,8 @@ app.post('/api/tournament', async (req, res) => {
         playersForPods: [],
         rounds: [],
         hasHadBye: [],
+        hideScores: !!hideScores,
+        hideDecklists: !!hideDecklists
     };
     try {
         await db.push(`/${id}`, tournament, true);
@@ -160,6 +192,10 @@ app.post('/api/tournament/:id/add-player', async (req, res) => {
             return res.status(403).json({ error: 'Not authorized to add players to this tournament' });
         }
         if (!Array.isArray(tournament.players)) tournament.players = [];
+        // --- Check for duplicate player name ---
+        if (tournament.players.some(p => p.name === playerName)) {
+            return res.status(400).json({ error: 'A player with this name already exists.' });
+        }
         tournament.players.push({ name: playerName, deck: deckLink || '' });
         tournament.playersForPods.push(playerName); // <-- Add this line
         await db.push(`/${id}/players`, tournament.players, true);
@@ -226,7 +262,7 @@ app.post('/api/tournament/:id/edit-player', async (req, res) => {
 // Edit tournament details (only if user owns it)
 app.post('/api/tournament/:id/edit', async (req, res) => {
     const { id } = req.params;
-    const { userId, title, date } = req.body;
+    const { userId, title, date, hideScores = false, hideDecklists = false } = req.body;
     if (!userId || !title || !date) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -237,6 +273,8 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
         }
         tournament.title = title;
         tournament.date = date;
+        tournament.hideScores = !!hideScores;
+        tournament.hideDecklists = !!hideDecklists;
         await db.push(`/${id}`, tournament, true);
         return res.json({ success: true, tournament });
     } catch (error) {

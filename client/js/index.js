@@ -43,12 +43,34 @@ async function fetchTournaments(userId) {
     });
     if (res.ok) {
         const tournaments = await res.json();
-        if (tournaments.length > 0) {
-            document.getElementById('tournaments').innerHTML =
-                `<h2>Your Tournaments:</h2>
+
+        // Split tournaments into upcoming and past
+        const now = new Date();
+        const upcoming = [];
+        const past = [];
+        tournaments.forEach((t) => {
+            let dateObj = null;
+            if (t.date) {
+                dateObj = new Date(t.date.trim());
+            }
+            if (dateObj && !isNaN(dateObj)) {
+                if (dateObj >= now) {
+                    upcoming.push(t);
+                } else {
+                    past.push(t);
+                }
+            } else {
+                // If date is invalid, treat as upcoming
+                upcoming.push(t);
+            }
+        });
+
+        let html = '';
+        if (upcoming.length > 0) {
+            html += `<h2>Your Tournaments:</h2>
                 <table class="tournament-table" style="width:100%;">
                     <tbody>
-                        ${tournaments.map((t) => {
+                        ${upcoming.map((t) => {
                             let dateStr = '';
                             if (t.date) {
                                 const date = new Date(t.date.trim());
@@ -64,34 +86,59 @@ async function fetchTournaments(userId) {
                         }).join('')}
                     </tbody>
                 </table>`;
-            // Attach delete handlers
-            document.querySelectorAll('.delete-tournament-btn').forEach(btn => {
-                btn.onclick = async function(e) {
-                    e.preventDefault();
-                    const tr = btn.closest('tr[data-tournament-id]');
-                    const tournamentId = tr.getAttribute('data-tournament-id');
-                    if (confirm('Are you sure you want to delete this tournament? This cannot be undone.')) {
-                        try {
-                            const res = await fetch(`/api/tournament/${tournamentId}`, {
-                                method: 'DELETE',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId })
-                            });
-                            const data = await res.json();
-                            if (data.success) {
-                                tr.remove();
-                            } else {
-                                alert(data.error || 'Failed to delete tournament.');
-                            }
-                        } catch (err) {
-                            alert('Failed to delete tournament.');
-                        }
-                    }
-                };
-            });
         } else {
-            document.getElementById('tournaments').innerHTML = '<h2>No tournaments found for your account.</h2>';
+            html += '<h2>No upcoming tournaments found for your account.</h2>';
         }
+
+        if (past.length > 0) {
+            html += `<h2 style="margin-top:2em;">Past Tournaments:</h2>
+                <table class="tournament-table" style="width:100%;">
+                    <tbody>
+                        ${past.map((t) => {
+                            let dateStr = '';
+                            if (t.date) {
+                                const date = new Date(t.date.trim());
+                                dateStr = isNaN(date) ? 'Unknown date' : date.toLocaleString();
+                            } else {
+                                dateStr = 'Unknown date';
+                            }
+                            return `<tr data-tournament-id="${t.id}">
+                                <td style="width:50%; text-align: center;"><a href="tournament/${t.id}" class="tournament-link">${t.title}</a></td>
+                                <td style="width:30%; text-align: center;"><span style="color:#888;">${dateStr}</span></td>
+                                <td style="width:20%;"><button class="delete-tournament-btn" style="margin-left:10px;">Delete</button></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        document.getElementById('tournaments').innerHTML = html;
+
+        // Attach delete handlers for both sections
+        document.querySelectorAll('.delete-tournament-btn').forEach(btn => {
+            btn.onclick = async function(e) {
+                e.preventDefault();
+                const tr = btn.closest('tr[data-tournament-id]');
+                const tournamentId = tr.getAttribute('data-tournament-id');
+                if (confirm('Are you sure you want to delete this tournament? This cannot be undone.')) {
+                    try {
+                        const res = await fetch(`/api/tournament/${tournamentId}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            tr.remove();
+                        } else {
+                            alert(data.error || 'Failed to delete tournament.');
+                        }
+                    } catch (err) {
+                        alert('Failed to delete tournament.');
+                    }
+                }
+            };
+        });
     } else {
         document.getElementById('tournaments').innerHTML = '';
     }
@@ -178,11 +225,13 @@ document.getElementById('submitTournamentBtn').onclick = async function() {
     // Combine date and time into ISO string
     let dateTime = date;
     if (time) dateTime += 'T' + time;
+    const hideScores = document.getElementById('hideScoresCheckbox').checked;
+    const hideDecklists = document.getElementById('hideDecklistsCheckbox').checked;
     try {
         const res = await fetch('/api/tournament', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, username, title, date: dateTime })
+            body: JSON.stringify({ userId, username, title, date: dateTime, hideScores, hideDecklists })
         });
         const data = await res.json();
         if (data.success) {

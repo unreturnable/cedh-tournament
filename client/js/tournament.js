@@ -89,12 +89,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Main render function ---
     async function renderTournament(force = false) {
         try {
-            const res = await fetch(`/api/tournament/${tournamentId}`);
+            // Always send userId as query param if available
+            let url = `/api/tournament/${tournamentId}`;
+            if (currentUserId) url += `?userId=${encodeURIComponent(currentUserId)}`;
+            const res = await fetch(url);
             if (!res.ok) {
                 if (infoDiv) infoDiv.innerHTML = '<h2>Tournament not found.</h2>';
                 return;
             }
             const tournament = await res.json();
+
+            // Add this line:
+            const isOwner = currentUserId && tournament.user === String(currentUserId);
 
             // Only update UI if data changed or force is true
             const tournamentString = JSON.stringify(tournament);
@@ -131,8 +137,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (Array.isArray(tournament.players) && tournament.players.length > 0) {
                 // Sort players by points descending
                 const sortedPlayers = [...tournament.players].sort((a, b) => {
-                    const pointsA = typeof a === 'object' && a.points !== undefined ? a.points : 1000;
-                    const pointsB = typeof b === 'object' && b.points !== undefined ? b.points : 1000;
+                    const pointsA = (typeof a === 'object' && typeof a.points === 'number') ? a.points : 1000;
+                    const pointsB = (typeof b === 'object' && typeof b.points === 'number') ? b.points : 1000;
                     return pointsB - pointsA;
                 });
 
@@ -162,27 +168,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                 playersTableContainer.id = 'players-table-container';
                 playersTableContainer.style.display = playersCollapsed ? 'none' : 'block';
 
+                // Determine which columns to show
+                const showPoints = !tournament.hideScores || isOwner;
+                const showDeck = !tournament.hideDecklists || isOwner;
+
+                // Build table header
+                let tableHeader = `
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        ${showPoints ? '<th>Points</th>' : ''}
+                        ${showDeck ? '<th>Deck</th>' : ''}
+                        <th></th>
+                        <th></th>
+                    </tr>
+                `;
+
+                // Build table rows
+                let tableRows = sortedPlayers.map((p, idx) => {
+                    let editBtn = '';
+                    let removeBtn = '';
+                    if (currentUserId && tournament.user === String(currentUserId)) {
+                        editBtn = `<button class="edit-player-btn" data-player-name="${encodeURIComponent(p.name)}" data-player-deck="${encodeURIComponent(p.deck || '')}">Edit</button>`;
+                        removeBtn = `<button class="remove-player-btn" data-player-name="${encodeURIComponent(p.name)}">Remove</button>`;
+                    }
+                    const points = (typeof p === 'object' && typeof p.points === 'number') ? p.points : 1000;
+                    return `<tr>
+                            <td class="player-position">${idx + 1}</td>
+                            <td class="player-name">${p.name}</td>
+                            ${showPoints ? `<td class="player-points">${points} pts</td>` : ''}
+                            ${showDeck ? `<td class="player-deck">${p.deck ? `<a href="${p.deck}" target="_blank">Deck List</a>` : ''}</td>` : ''}
+                            <td class="player-edit">${editBtn}</td>
+                            <td class="player-remove">${removeBtn}</td>
+                        </tr>`;
+                }).join('');
+
                 playersTableContainer.innerHTML = `
                     <table class="player-table">
-                        <tbody>
-                            ${sortedPlayers.map((p, idx) => {
-                                let editBtn = '';
-                                let removeBtn = '';
-                                if (currentUserId && tournament.user === String(currentUserId)) {
-                                    editBtn = `<button class="edit-player-btn" data-player-name="${encodeURIComponent(p.name)}" data-player-deck="${encodeURIComponent(p.deck || '')}">Edit</button>`;
-                                    removeBtn = `<button class="remove-player-btn" data-player-name="${encodeURIComponent(p.name)}">Remove</button>`;
-                                }
-                                const points = typeof p === 'object' && p.points !== undefined ? p.points : 1000;
-                                return `<tr>
-                                    <td class="player-position">${idx + 1}</td>
-                                    <td class="player-name">${p.name}</td>
-                                    <td class="player-points">${points} pts</td>
-                                    <td class="player-deck">${p.deck ? `<a href="${p.deck}" target="_blank">Deck List</a>` : ''}</td>
-                                    <td class="player-edit">${editBtn}</td>
-                                    <td class="player-remove">${removeBtn}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
+                        <thead>${tableHeader}</thead>
+                        <tbody>${tableRows}</tbody>
                     </table>
                 `;
 
@@ -418,6 +442,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const timeOnly = tournament.date && tournament.date.includes('T') ? tournament.date.split('T')[1].slice(0,5) : '';
                     document.getElementById('edit-tournament-date-input').value = dateOnly;
                     document.getElementById('edit-tournament-time-input').value = timeOnly;
+                    document.getElementById('edit-hide-scores-checkbox').checked = !!tournament.hideScores;
+                    document.getElementById('edit-hide-decklists-checkbox').checked = !!tournament.hideDecklists;
                     // Focus first input
                     document.getElementById('edit-tournament-name-input').focus();
                 };
@@ -429,6 +455,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const newTitle = document.getElementById('edit-tournament-name-input').value.trim();
                     const newDate = document.getElementById('edit-tournament-date-input').value;
                     const newTime = document.getElementById('edit-tournament-time-input').value;
+                    const hideScores = document.getElementById('edit-hide-scores-checkbox').checked;
+                    const hideDecklists = document.getElementById('edit-hide-decklists-checkbox').checked;
                     if (!newTitle || !newDate) {
                         document.getElementById('edit-tournament-error').innerText = 'Please enter a name and date.';
                         return;
@@ -439,7 +467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const res = await fetch(`/api/tournament/${tournamentId}/edit`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUserId, title: newTitle, date: dateTime })
+                            body: JSON.stringify({ userId: currentUserId, title: newTitle, date: dateTime, hideScores, hideDecklists })
                         });
                         const data = await res.json();
                         if (data.success) {
@@ -598,31 +626,48 @@ document.addEventListener('DOMContentLoaded', async () => {
                 droppedHeader.style.color = 'var(--solarized-red)';
                 playersList.appendChild(droppedHeader);
 
+                // Determine which columns to show for dropped players
+                const showPoints = !tournament.hideScores || isOwner;
+                const showDeck = !tournament.hideDecklists || isOwner;
+
                 // Build dropped players table (same style as players table)
+                let droppedTableHeader = `
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        ${showPoints ? '<th>Points</th>' : ''}
+                        ${showDeck ? '<th>Deck</th>' : ''}
+                        <th></th>
+                        <th></th>
+                    </tr>
+                `;
+                let droppedTableRows = tournament.droppedPlayers.map((p, idx) => {
+                    const player = typeof p === 'object' ? p : { name: p, points: 1000, deck: '' };
+                    let undropBtn = '';
+                    if (
+                        currentUserId &&
+                        tournament.user === String(currentUserId)
+                    ) {
+                        undropBtn = `<button class="undrop-player-btn" data-player-name="${encodeURIComponent(player.name)}">Undrop</button>`;
+                    }
+                    const points = player.points !== undefined ? player.points : 1000;
+                    return `<tr>
+                        <td class="player-position">${idx + 1}</td>
+                        <td class="player-name">${player.name}</td>
+                        ${showPoints ? `<td class="player-points">${points} pts</td>` : ''}
+                        ${showDeck ? `<td class="player-deck">${player.deck ? `<a href="${player.deck}" target="_blank">Deck List</a>` : ''}</td>` : ''}
+                        <td class="player-edit"></td>
+                        <td class="player-remove">${undropBtn}</td>
+                    </tr>`;
+                }).join('');
+
                 const droppedTableContainer = document.createElement('div');
                 droppedTableContainer.style.marginBottom = '1em';
                 droppedTableContainer.innerHTML = `
                     <table class="player-table">
+                        <thead>${droppedTableHeader}</thead>
                         <tbody>
-                            ${tournament.droppedPlayers.map((p, idx) => {
-                                const player = typeof p === 'object' ? p : { name: p, points: 1000, deck: '' };
-                                let undropBtn = '';
-                                if (
-                                    currentUserId &&
-                                    tournament.user === String(currentUserId)
-                                ) {
-                                    undropBtn = `<button class="undrop-player-btn" data-player-name="${encodeURIComponent(player.name)}">Undrop</button>`;
-                                }
-                                const points = player.points !== undefined ? player.points : 1000;
-                                return `<tr>
-                                    <td class="player-position">${idx + 1}</td>
-                                    <td class="player-name">${player.name}</td>
-                                    <td class="player-points">${points} pts</td>
-                                    <td class="player-deck">${player.deck ? `<a href="${player.deck}" target="_blank">Deck List</a>` : ''}</td>
-                                    <td class="player-edit"></td>
-                                    <td class="player-remove">${undropBtn}</td>
-                                </tr>`;
-                            }).join('')}
+                            ${droppedTableRows}
                         </tbody>
                     </table>
                 `;
