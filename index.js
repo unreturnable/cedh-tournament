@@ -4,6 +4,8 @@ const cors = require('cors');
 const { JsonDB, Config } = require('node-json-db'); // Add this line
 const { clientId, clientSecret, protocol, host, port, redirect } = require('./config.json');
 const { v4: uuidv4 } = require('uuid'); // Add at the top: npm install uuid
+const http = require('http');
+const WebSocket = require('ws');
 
 // Initialize the database
 const db = new JsonDB(new Config("tournaments", true, false, '/')); // DB file: tournaments.json
@@ -200,6 +202,7 @@ app.post('/api/tournament/:id/add-player', async (req, res) => {
         tournament.playersForPods.push(playerName); // <-- Add this line
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, players: tournament.players });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -227,6 +230,7 @@ app.post('/api/tournament/:id/remove-player', async (req, res) => {
         }
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, players: tournament.players });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -253,6 +257,7 @@ app.post('/api/tournament/:id/edit-player', async (req, res) => {
         player.name = newName;
         player.deck = newDeck || '';
         await db.push(`/${id}/players`, tournament.players, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, players: tournament.players });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -276,6 +281,7 @@ app.post('/api/tournament/:id/edit', async (req, res) => {
         tournament.hideScores = !!hideScores;
         tournament.hideDecklists = !!hideDecklists;
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, tournament });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -598,7 +604,7 @@ app.post('/api/tournament/:id/nextRound', async (req, res) => {
 
         tournament.rounds.push(roundData);
         await db.push(`/${id}`, tournament, true);
-
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, round: roundData, rounds: tournament.rounds });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -662,6 +668,7 @@ app.post('/api/tournament/:id/cancelRound', async (req, res) => {
 
         tournament.rounds.pop();
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, rounds: tournament.rounds });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -701,6 +708,7 @@ app.post('/api/tournament/:id/drop-player', async (req, res) => {
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
         await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
+        notifyTournamentClients(id); // <-- Notify clients
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {
@@ -734,6 +742,7 @@ app.post('/api/tournament/:id/undrop-player', async (req, res) => {
         await db.push(`/${id}/players`, tournament.players, true);
         await db.push(`/${id}/droppedPlayers`, tournament.droppedPlayers, true);
         await db.push(`/${id}/playersForPods`, tournament.playersForPods, true); // <-- Add this line
+        notifyTournamentClients(id); // <-- Notify clients
 
         return res.json({ success: true, players: tournament.players, droppedPlayers: tournament.droppedPlayers, rounds: tournament.rounds });
     } catch (error) {
@@ -774,6 +783,7 @@ app.post('/api/tournament/:id/report-pod-result', async (req, res) => {
             return res.status(400).json({ error: 'Invalid result' });
         }
         await db.push(`/${id}/rounds`, tournament.rounds, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, pod });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -805,6 +815,7 @@ app.post('/api/tournament/:id/undo-pod-result', async (req, res) => {
         pod.result = '';
         pod.winner = '';
         await db.push(`/${id}/rounds`, tournament.rounds, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, pod });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -893,6 +904,7 @@ app.post('/api/tournament/:id/topcut', async (req, res) => {
             semiFinalPlayers: semiFinalPlayers.map(p => p.name)
         };
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
 
         return res.json({ success: true, round: roundData, rounds: tournament.rounds, topCut: tournament.topCut });
     } catch (error) {
@@ -996,6 +1008,7 @@ app.post('/api/tournament/:id/final', async (req, res) => {
         tournament.rounds.push(roundData);
         tournament.ended = true;
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
 
         return res.json({ success: true, round: roundData, rounds: tournament.rounds });
     } catch (error) {
@@ -1033,6 +1046,7 @@ app.post('/api/tournament/:id/lock', async (req, res) => {
         }
         tournament.locked = true;
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, tournament });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
@@ -1080,10 +1094,47 @@ app.post('/api/tournament/:id/unlock', async (req, res) => {
         }
         tournament.locked = false;
         await db.push(`/${id}`, tournament, true);
+        notifyTournamentClients(id); // <-- Notify clients
         return res.json({ success: true, tournament });
     } catch (error) {
         return res.status(404).json({ error: 'Tournament not found' });
     }
 });
 
-app.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+const wsClients = {}; // { tournamentId: Set of ws }
+
+function notifyTournamentClients(tournamentId) {
+    if (wsClients[tournamentId]) {
+        wsClients[tournamentId].forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'tournament-update', tournamentId }));
+            }
+        });
+    }
+}
+
+wss.on('connection', (ws, req) => {
+    let subscribedId = null;
+    ws.on('message', msg => {
+        try {
+            const data = JSON.parse(msg);
+            if (data.type === 'subscribe' && data.tournamentId) {
+                subscribedId = data.tournamentId;
+                wsClients[subscribedId] = wsClients[subscribedId] || new Set();
+                wsClients[subscribedId].add(ws);
+            }
+        } catch {}
+    });
+    ws.on('close', () => {
+        if (subscribedId && wsClients[subscribedId]) {
+            wsClients[subscribedId].delete(ws);
+            if (wsClients[subscribedId].size === 0) delete wsClients[subscribedId];
+        }
+    });
+});
+
+// Replace app.listen(...) with:
+server.listen(port, () => console.log(`App listening at ${protocol}://${host}:${port}`));
