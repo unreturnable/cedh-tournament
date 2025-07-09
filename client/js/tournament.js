@@ -71,11 +71,11 @@ function connectWebSocket(tournamentId) {
         updateWsStatus(true); // Update status to connected
         ws.send(JSON.stringify({ type: 'subscribe', tournamentId }));
     };
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'tournament-update' && data.tournamentId === tournamentId) {
-                renderTournament();
+                await renderTournament();
             }
         } catch(e) {
             console.error('Error parsing WebSocket message:', event.data, e);
@@ -112,6 +112,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     connectWebSocket(tournamentId);
 });
 
+let lastTournamentData = null;
+
 // --- Main render function ---
 async function renderTournament(force = false) {
     const match = window.location.pathname.match(/\/tournament\/([^\/]+)/);
@@ -132,7 +134,6 @@ async function renderTournament(force = false) {
     const roundsContainer = document.getElementById('rounds-container');
 
     let editingOldName = '';
-    let lastTournamentData = null;
 
     try {
         // Always send userId as query param if available
@@ -305,7 +306,7 @@ async function renderTournament(force = false) {
                         });
                         const data = await res.json();
                         if (data.success) {
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             await showAlertModal(data.error || 'Failed to start tournament.');
                         }
@@ -387,7 +388,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                renderTournament();
+                                await renderTournament();
                             } else {
                                 await showAlertModal(data.error || 'Failed to cancel round.');
                             }
@@ -516,7 +517,7 @@ async function renderTournament(force = false) {
                     const data = await res.json();
                     if (data.success) {
                         editTournamentModal.style.display = 'none';
-                        renderTournament();
+                        await renderTournament();
                     } else {
                         document.getElementById('edit-tournament-error').innerText = data.error || 'Failed to edit tournament.';
                     }
@@ -556,7 +557,7 @@ async function renderTournament(force = false) {
                     const data = await res.json();
                     if (data.success) {
                         addPlayerModal.style.display = 'none';
-                        renderTournament();
+                        await renderTournament();
                     } else {
                         document.getElementById('add-player-error').innerText = data.error || 'Failed to add player.';
                         await showAlertModal(data.error || 'Failed to add player.');
@@ -588,7 +589,7 @@ async function renderTournament(force = false) {
                         });
                         const data = await res.json();
                         if (data.success) {
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             await showAlertModal(data.error || 'Failed to remove player.');
                         }
@@ -645,7 +646,7 @@ async function renderTournament(force = false) {
                     const data = await res.json();
                     if (data.success) {
                         editPlayerModal.style.display = 'none';
-                        renderTournament();
+                        await renderTournament();
                     } else {
                         document.getElementById('edit-player-error').innerText = data.error || 'Failed to edit player.';
                         await showAlertModal(data.error || 'Failed to edit player.');
@@ -729,7 +730,7 @@ async function renderTournament(force = false) {
                         });
                         const data = await res.json();
                         if (data.success) {
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             await showAlertModal(data.error || 'Failed to undrop player.');
                         }
@@ -773,7 +774,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                renderTournament();
+                                await renderTournament(true);
                             } else {
                                 await showAlertModal(data.error || 'Failed to drop player.');
                             }
@@ -823,7 +824,7 @@ async function renderTournament(force = false) {
                         });
                         const data = await res.json();
                         if (data.success) {
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             await showAlertModal(data.error || 'Failed to start next round.');
                         }
@@ -871,7 +872,7 @@ async function renderTournament(force = false) {
                         const data = await res.json();
                         if (data.success) {
                             document.getElementById('top-cut-modal').style.display = 'none';
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             document.getElementById('top-cut-error').innerText = data.error || 'Failed to create top cut.';
                         }
@@ -895,7 +896,7 @@ async function renderTournament(force = false) {
                         });
                         const data = await res.json();
                         if (data.success) {
-                            renderTournament();
+                            await renderTournament();
                         } else {
                             await showAlertModal(data.error || 'Failed to create final round.');
                         }
@@ -946,7 +947,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                renderTournament();
+                                await renderTournament();
                             } else {
                                 await showAlertModal(data.error || 'Failed to unlock tournament.');
                             }
@@ -974,7 +975,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                renderTournament();
+                                await renderTournament();
                             } else {
                                 await showAlertModal(data.error || 'Failed to lock tournament.');
                             }
@@ -1034,7 +1035,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                renderTournament();
+                                await renderTournament(true);
                             } else {
                                 await showAlertModal(data.error || 'Failed to undo pod result.');
                             }
@@ -1074,7 +1075,7 @@ async function renderTournament(force = false) {
                                     const data = await res.json();
                                     if (data.success) {
                                         modal.style.display = 'none';
-                                        await renderTournament();
+                                        await renderTournament(true); // <-- Force update here
                                     } else {
                                         modalError.innerText = data.error || 'Failed to report result.';
                                     }
@@ -1107,7 +1108,7 @@ async function renderTournament(force = false) {
                             });
                             const data = await res.json();
                             if (data.success) {
-                                await renderTournament(); // <-- Await here
+                                await renderTournament(true); // <-- Force update here
                             } else {
                                 alert(data.error || 'Failed to report result.');
                             }
