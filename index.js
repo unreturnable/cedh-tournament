@@ -105,7 +105,23 @@ app.get('/api/tournament/:id', async (req, res) => {
         // Clone tournament to avoid mutating DB
         const filtered = JSON.parse(JSON.stringify(tournament));
 
-        if (!isOwner) {
+        // --- Sort players and droppedPlayers by points descending ---
+        if (Array.isArray(filtered.players)) {
+            filtered.players.sort((a, b) => {
+                const pointsA = (typeof a === 'object' && typeof a.points === 'number') ? a.points : 1000;
+                const pointsB = (typeof b === 'object' && typeof b.points === 'number') ? b.points : 1000;
+                return pointsB - pointsA;
+            });
+        }
+        if (Array.isArray(filtered.droppedPlayers)) {
+            filtered.droppedPlayers.sort((a, b) => {
+                const pointsA = (typeof a === 'object' && typeof a.points === 'number') ? a.points : 1000;
+                const pointsB = (typeof b === 'object' && typeof b.points === 'number') ? b.points : 1000;
+                return pointsB - pointsA;
+            });
+        }
+
+        if (!isOwner && !tournament.locked) {
             if (filtered.hideScores) {
                 // Remove points from players and droppedPlayers
                 if (Array.isArray(filtered.players)) {
