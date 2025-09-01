@@ -179,7 +179,7 @@ async function renderTournament(force = false) {
         }
 
         // Players List
-        if (Array.isArray(tournament.players) && tournament.players.length > 0) {
+        if (Array.isArray(tournament.players) && tournament.players.length >= 0) {
             const sortedPlayers = tournament.players; // Already sorted by server
 
             // Build players section header with collapse button
